@@ -24,7 +24,8 @@ export default function create(ctx) {
       @keyframes carIn { from { opacity:0; transform:scale(.86) translateY(-1.5vw); } to { opacity:1; transform:none; } }
       .car-empty { position:absolute; inset:0; display:grid; place-items:center; color:#9fb0b2; font-size:max(16px,1.6vw); z-index:2; }
       /* photo popping out of the carousel: full screen, slow zoom towards the faces */
-      .car-pop { position:absolute; inset:0; z-index:5; display:none; overflow:hidden; background:#05080a; }
+      .car-pop { position:absolute; z-index:5; display:none; overflow:hidden; background:transparent;
+        box-shadow:0 2vw 8vw rgba(0,0,0,.55); will-change:left,top,width,height; }
       .car-pop.on { display:block; }
       .car-pop img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; will-change:transform; }
     `;
@@ -96,7 +97,7 @@ export default function create(ctx) {
     if (!pop || !im) return null;
     const [fx, fy] = focusOf(p);
     const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.3, top: H()*.3, width: W()*.4, height: H()*.4 };
-    im.src = img(p);
+    im.src = img(p, 'orig'); // full-resolution original, not the 480px carousel thumbnail
     im.style.transition = 'none';
     im.style.transform = 'none';
     im.style.transformOrigin = '50% 50%';
@@ -106,10 +107,16 @@ export default function create(ctx) {
     Object.assign(pop.style, { transition: 'none', left: r0.left + 'px', top: r0.top + 'px',
       width: r0.width + 'px', height: r0.height + 'px', borderRadius: '.5vw' });
     showTag(p);
-    // grow out of the carousel tile: you can see exactly where the photo comes from
+    // Grow out of the carousel tile, but only up to the photo's own aspect ratio (a portrait photo stays
+    // portrait and centred, it does not fill the screen; the moving carousel stays visible behind it).
+    const iw = p.w || 3, ih = p.h || 2;
+    const maxW = W() * 0.92, maxH = H() * 0.88;
+    const k = Math.min(maxW / iw, maxH / ih);
+    const tw = Math.round(iw * k), th = Math.round(ih * k);
+    const target = { left: Math.round((W() - tw) / 2), top: Math.round((H() - th) / 2), width: tw, height: th };
     requestAnimationFrame(() => requestAnimationFrame(() => {
       pop.style.transition = 'left .55s cubic-bezier(.2,.8,.2,1), top .55s cubic-bezier(.2,.8,.2,1), width .55s cubic-bezier(.2,.8,.2,1), height .55s cubic-bezier(.2,.8,.2,1), border-radius .55s';
-      Object.assign(pop.style, { left: '0px', top: '0px', width: W() + 'px', height: H() + 'px', borderRadius: '0px' });
+      Object.assign(pop.style, { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', borderRadius: '.35vw' });
     }));
     // then a slow zoom anchored on the faces (works for landscape and portrait)
     const zoomMs = Math.max(2200, (settings().loopSec || 5) * 700);
