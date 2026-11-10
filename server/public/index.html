@@ -91,7 +91,8 @@
   .cm-sub { margin: 0; color: var(--steel); }
   .cm-go { width: 100%; padding: 14px; font-size: 16px; }
   .cm-close { position: absolute; right: 10px; top: 8px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--steel); cursor: pointer; padding: 6px; }
-  .cm-alt { font-size: 13px; }
+  .cm-alt { font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; justify-content: center; }
+  .cm-alt .linkbtn { white-space: nowrap; }
   .code-box .field { text-align: left; }
   .code-box details { text-align: left; }
   .cm-meta { margin: -6px 0 0; color: var(--steel); font-size: 14px; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 10px; }
@@ -263,7 +264,7 @@
   <div class="wrap" style="display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between">
     <div>© <span id="yr"></span> PROMEDIA CREATIVE SOLUTIONS (JR0113470-V) · <a href="https://johorstudio.com">JohorStudio.com</a></div>
     <div>3038-A, Jln Merbau Satu, Bandar Putra, 81000 Kulai, Johor</div>
-    <div class="foot-links"><button class="linkbtn" type="button" id="organiserLink">Organiser</button> · <a href="/admin">Admin</a></div>
+    <div class="foot-links"><button class="linkbtn" type="button" id="organiserLink">Organiser</button></div>
   </div>
 </footer>
 
@@ -294,6 +295,7 @@
     </details>
     <div class="cm-alt">
       <button class="linkbtn" type="button" id="cmPhotog">Sign in as photographer</button>
+      <button class="linkbtn" type="button" id="cmClient">Sign in as organizer</button>
       <button class="linkbtn hidden" type="button" id="cmGuest">I'm a guest</button>
     </div>
   </div>
@@ -340,6 +342,7 @@ function setMode(m, ev, view = 'code') {
   $('#cmHelp').textContent = t.help;
   $('#cmNameField').classList.toggle('hidden', m === 'guest');
   $('#cmPhotog').classList.toggle('hidden', m !== 'guest');
+  $('#cmClient').classList.toggle('hidden', m !== 'guest');
   $('#cmGuest').classList.toggle('hidden', m === 'guest');
   $('#cmErr').textContent = '';
 }
@@ -362,6 +365,7 @@ $('#cmClose').onclick = closeModal;
 $('#codeModal').addEventListener('click', (e) => { if (e.target.id === 'codeModal') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#codeModal').classList.contains('hidden')) closeModal(); });
 $('#cmPhotog').onclick = () => { setMode('photographer'); boxes.clear(); };
+$('#cmClient').onclick = () => { setMode('client'); boxes.clear(); };
 $('#cmGuest').onclick = () => { boxes.clear(); openModal('guest'); };
 $('#codeLink').onclick = () => openModal('guest');
 $('#organiserLink').onclick = () => openModal('client');

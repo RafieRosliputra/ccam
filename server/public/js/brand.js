@@ -112,8 +112,9 @@
     }
     var block = document.createElement('div');
     block.setAttribute('data-platform-credit-block', '1');
-    block.setAttribute('style', 'opacity:.85;font-size:13px');
-    block.innerHTML = creditHtml;
+    // Centred bottom line: "platform provided by JohorStudio.com · Admin"
+    block.setAttribute('style', 'flex:1 1 100%;width:100%;text-align:center;opacity:.9;font-size:13px;padding-top:6px');
+    block.innerHTML = creditHtml + ' · <a href="/admin" style="color:inherit">Admin</a>';
     f.appendChild(block);
   });
   // The gallery footer holds the WhatsApp link; keep it and append the credit.
