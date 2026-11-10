@@ -7,6 +7,7 @@ export default function create(ctx) {
   const { photos, img, pick, R, reduce, settings } = ctx;
   const W = () => innerWidth, H = () => innerHeight;
   let root, grid, per = 4, pinnedId = null, idleTimer = null, popTimer = null, popHandle = null, popEl = null, tagEl = null, busy = false;
+  let nextCol = 0, popTrack = null; // which column pops next, and the column paused while its photo is out
 
   function injectCss() {
     if (document.getElementById('mod-carousel-css')) return;
@@ -55,7 +56,7 @@ export default function create(ctx) {
     for (let c = 0; c < 2; c++) {
       const col = document.createElement('div'); col.className = 'car-col';
       const track = document.createElement('div'); track.className = 'car-track';
-      track.style.setProperty('--speed', (c === 0 ? 58 : 66) + 's');
+      track.style.setProperty('--speed', (c === 0 ? 116 : 132) + 's');
       col.appendChild(track); grid.appendChild(col);
     }
     root.appendChild(grid);
@@ -96,7 +97,7 @@ export default function create(ctx) {
     const im = pop && pop.querySelector('img');
     if (!pop || !im) return null;
     const [fx, fy] = focusOf(p);
-    const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.3, top: H()*.3, width: W()*.4, height: H()*.4 };
+    const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.35, top: H()*.3, width: W()*.3, height: H()*.3 };
     im.src = img(p, 'orig'); // full-resolution original, not the 480px carousel thumbnail
     im.style.transition = 'none';
     im.style.transform = 'none';
@@ -107,8 +108,8 @@ export default function create(ctx) {
     Object.assign(pop.style, { transition: 'none', left: r0.left + 'px', top: r0.top + 'px',
       width: r0.width + 'px', height: r0.height + 'px', borderRadius: '.5vw' });
     showTag(p);
-    // Grow out of the carousel tile, but only up to the photo's own aspect ratio (a portrait photo stays
-    // portrait and centred, it does not fill the screen; the moving carousel stays visible behind it).
+    // Grow out of exactly that carousel slide (the column is paused, so it is obvious where it came from):
+    // only up to the photo's own aspect ratio — a portrait stays portrait and centred, never fullscreen.
     const iw = p.w || 3, ih = p.h || 2;
     const maxW = W() * 0.92, maxH = H() * 0.88;
     const k = Math.min(maxW / iw, maxH / ih);
@@ -118,23 +119,28 @@ export default function create(ctx) {
       pop.style.transition = 'left .55s cubic-bezier(.2,.8,.2,1), top .55s cubic-bezier(.2,.8,.2,1), width .55s cubic-bezier(.2,.8,.2,1), height .55s cubic-bezier(.2,.8,.2,1), border-radius .55s';
       Object.assign(pop.style, { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', borderRadius: '.35vw' });
     }));
-    // then a slow zoom anchored on the faces (works for landscape and portrait)
-    const zoomMs = Math.max(2200, (settings().loopSec || 5) * 700);
-    const zoom = () => {
-      im.style.transition = `transform ${zoomMs}ms cubic-bezier(.25,.6,.3,1)`;
+    const zoomInMs = Math.max(1800, (settings().loopSec || 5) * 380);
+    const zoomOutMs = Math.max(1400, (settings().loopSec || 5) * 300);
+    const holdMs = 350;
+    const from = 'translate(0,0)'; // image sits in its frame (object-fit cover)
+    setTimeout(() => {
+      im.style.transition = `transform ${zoomInMs}ms cubic-bezier(.25,.6,.3,1)`;
       im.style.transformOrigin = `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
       im.style.transform = `scale(${reduce ? 1 : R(1.26, 1.34)})`;
-    };
-    setTimeout(zoom, 650);
-    return { pop, im, r0, zoomMs, pinned };
+      setTimeout(() => {
+        if (pinned) return; // pinned photos stay zoomed until released
+        im.style.transition = `transform ${zoomOutMs}ms cubic-bezier(.3,.5,.4,1)`;
+        im.style.transform = 'scale(1)';
+      }, zoomInMs + holdMs);
+    }, 620);
+    return { pop, im, r0, zoomInMs, zoomOutMs, holdMs, pinned };
   }
   function closePopup(handle, done) {
     if (!handle) return;
-    const { pop, im, zoomMs } = handle;
-    im.style.transition = `transform ${Math.min(600, zoomMs / 3)}ms ease-out`;
+    const { pop, im } = handle;
+    im.style.transition = 'transform .45s ease-out';
     im.style.transform = 'none';
     setTimeout(() => {
-      // go back into whichever tile holds this photo now (the columns keep scrolling, so re-measure)
       const id = pop.dataset.id;
       const tile = id ? grid && grid.querySelector(`.car-tile[data-id="${id}"]`) : null;
       const r = tile ? tile.getBoundingClientRect() : handle.r0;
@@ -144,21 +150,44 @@ export default function create(ctx) {
       setTimeout(() => { pop.classList.remove('on'); im.style.transition = 'none'; im.style.transform = 'none'; im.style.objectPosition = '50% 50%'; if (done) done(); }, reduce ? 80 : 520);
     }, reduce ? 60 : 420);
   }
+
+  // a photo that is visibly inside a column right now (so it always looks like it comes out of the scroll)
+  function visibleTile(colIdx) {
+    const col = grid && grid.children[colIdx]; if (!col) return null;
+    const vh = H();
+    const tiles = [...col.querySelectorAll('.car-tile')].filter((t) => {
+      const r = t.getBoundingClientRect();
+      return r.height > 0 && r.bottom > vh * 0.06 && r.top < vh * 0.82;
+    });
+    if (!tiles.length) return null;
+    // prefer one that is fully on screen
+    const good = tiles.filter((t) => { const r = t.getBoundingClientRect(); return r.top >= -4 && r.bottom <= vh + 4; });
+    return pick(good.length ? good : tiles);
+  }
   function popOut() {
     if (busy || pinnedId || !grid) return;
     const ps = list();
     if (ps.length < 2) return;
-    const p = pick(ps);
-    const tile = grid.querySelector(`.car-tile[data-id="${p.id}"]`);
-    const pop = root.querySelector('.car-pop');
-    if (!pop) return;
+    let colIdx = nextCol, tile = visibleTile(colIdx);
+    if (!tile) { colIdx = 1 - colIdx; tile = visibleTile(colIdx); }
+    if (!tile) return;
+    const p = ps.find((x) => x.id === tile.dataset.id);
+    if (!p) return;
+    nextCol = 1 - colIdx; // alternate columns
     busy = true;
+    popTrack = tile.closest('.car-track');
+    if (popTrack) popTrack.classList.add('paused'); // only this side pauses
+    const pop = root.querySelector('.car-pop');
+    if (!pop) { busy = false; return; }
     pop.dataset.id = p.id;
     const handle = openPopup(p, tile);
     if (!handle) { busy = false; return; }
     popTimer = setTimeout(() => {
-      closePopup(handle, () => { busy = false; popTimer = null; });
-    }, 650 + handle.zoomMs);
+      closePopup(handle, () => {
+        if (popTrack) { popTrack.classList.remove('paused'); popTrack = null; }
+        busy = false; popTimer = null;
+      });
+    }, 620 + handle.zoomInMs + handle.holdMs + handle.zoomOutMs);
   }
   function scheduleIdle(ms = 5000) {
     clearTimeout(idleTimer);
