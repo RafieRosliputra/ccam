@@ -417,7 +417,10 @@ async function showNew() {
   tag.className = 'tag';
   tag.innerHTML = '<b>NEW</b><span></span>';
   tag.querySelector('span').textContent = p.by ? `by ${p.by}` : (p.src === 'public' ? 'from a guest' : 'from the photographer');
+  tag.setAttribute('data-brand-lock', '1');   // keep the uploader name exactly as typed
   $('#stage').appendChild(tag);   // fixed position above the footer, not glued to the photo
+  const footEl = document.getElementById('foot');
+  if (footEl) tag.style.bottom = (innerHeight - footEl.getBoundingClientRect().top + 5) + 'px'; // exactly 5px above the overlay
   setBgHint(p);
   const side = pick([[-70, R(-30, 30)], [70, R(-30, 30)], [R(-40, 40), 70], [R(-40, 40), -70]]);
   const fly = reduce ? 400 : 1100;
