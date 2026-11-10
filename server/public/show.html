@@ -504,13 +504,13 @@ function connect() {
   es.addEventListener('photo', (e) => addPhoto(JSON.parse(e.data)));
   es.addEventListener('remove', (e) => removePhoto(JSON.parse(e.data).id));
   es.addEventListener('settings', (e) => { const d = JSON.parse(e.data); settings = { ...settings, ...d.settings }; if (d.code && d.code !== curCode) { curCode = d.code; setCode(d.code); } rebuildLoop(); });
-  es.addEventListener('screen', (e) => { const d = JSON.parse(e.data); setScreen(d.mode, d.v); });
+  es.addEventListener('screen', (e) => { const d = JSON.parse(e.data); window.__lastScreenEvent = d; setScreen(d.mode, d.v); });
   es.addEventListener('bubble', () => { settings.bubbleOn = true; showBubble(); });
   es.addEventListener('pin', (e) => { const d = JSON.parse(e.data); setPin(d.pin, d.photo); });
   es.addEventListener('qr', (e) => { const d = JSON.parse(e.data); showQr(d.until, d.code || curCode); });
   es.onerror = () => { if (es.readyState === EventSource.CLOSED) setTimeout(connect, 5000); };
   // refresh event info (code may change on a new live window) every minute
-  setInterval(async () => { try { applyEvent((await get(`${base}/events/${eventId}`)).event); rebuildLoop(); } catch { /* keep going */ } }, 60000);
+  setInterval(async () => { try { applyEvent((await get(`${base}/${eventId}`)).event); rebuildLoop(); } catch { /* keep going */ } }, 60000);
 }
 
 // Full screen + keep the screen awake + hide the cursor/controls when idle.
