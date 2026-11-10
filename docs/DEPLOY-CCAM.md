@@ -1,123 +1,55 @@
-# Deploy runbook · ccam.my white-label
+# Deploy / operate CCAM (m10 `ccam` app, port 8101)
 
-> English, dense. Executed against production on 2026-11-10 19:33 (see `docs/CCAM-STATUS.md` §5 for the exact state).
-> Keep this for future tenants/deploys and rollback.
-> Repo: `johorstudio-livephoto-events` · branch with the work: `ccam-tenants` (based on `205ea6d`).
-> App: TrueNAS custom app `livephoto` on m10 (`/mnt/ssd/livephoto/app`, port 8095), behind cloudflared tunnel.
+Code: `github.com/RafieRosliputra/ccam` (branch `main`).
+Server: m10 (`ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120`), TrueNAS custom app **`ccam`**.
 
-## 0. Pre-flight (must pass before touching m10)
+## Update the code (no Cloudflare work)
 
 ```bash
-cd app/server && npm test          # 45/45 pass
-node ../demo/verify.sh             # live HTTP checks (hosts, branding, hero photos, admin gate)
-git status --short                 # only expected files
+cd ~/ai/ccam.my/ccam-app && git push origin main            # from the Mac, after tests pass
+ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 \
+  'cd /mnt/ssd/ccam/app && git pull -q && git log --oneline -1'
+# static files (HTML/CSS/JS) are read from disk on every request — no restart needed.
+# server/src changes need a restart:
+ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 'midclt call app.redeploy ccam'
 ```
 
-Backup the production DB + brand dir first (m10):
+Health check: `curl -s http://127.0.0.1:8101/auth/config` on m10, or `curl -sI https://ccam.my/`.
+
+## Env / secrets
+
+`/mnt/ssd/ccam/ccam.env` (chmod 600): `ADMIN_EMAIL`, `WHATSAPP`, `CONTACT_URL`, `MAIL_API_KEY`.
+Everything else is in the app's compose config (`/mnt/ssd/ccam/app/deploy/compose.yaml` and the TrueNAS app
+config): `PUBLIC_URL=https://ccam.my`, `ADMIN_HOST=ccam.my`, `PLATFORM_HOSTS=ccam.my,www.ccam.my`,
+`TENANT_ZONE=ccam.my`, `BRANDS_DIR=/data/brands`, `ACCESS_AUD=<CCAM Admin UI AUD>`, `MODERATOR_URL=http://moderator:8096`.
+
+Changing compose-level env: edit `deploy/compose.yaml`, then apply with the API (custom apps reject unknown
+top-level fields):
+
+```bash
+# on m10: build {"custom_compose_config": {...}} from the desired compose and
+midclt call app.update ccam "$(cat /tmp/ccam_app_update.json)"
+midclt call app.job_wait <job id>   # or: midclt call core.job_wait <job id> 120
+```
+
+## Cloudflare (already done once — keep for reference)
+
+Tunnel `m10` public hostnames: `ccam.my` and `*.ccam.my` → `HTTP 192.168.0.100:8101` (leave Host Header empty).
+DNS: `CNAME @`, `CNAME www`, `CNAME *` → `5d1680e1-a30b-4010-9d52-eeae3c7abac9.cfargotunnel.com`, proxied.
+Always Use HTTPS ON. Access app **CCAM Admin UI** must cover `ccam.my/admin` and `ccam.my/api/admin`
+(AUD is the value in `ACCESS_AUD`). Do not put Access on the public pages.
+
+## Rollback
 
 ```bash
 ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 \
-  'sudo cp /mnt/ssd/livephoto/data/livephoto.db /mnt/ssd/livephoto/data/livephoto.db.bak-$(date +%Y%m%d-%H%M) && ls -la /mnt/ssd/livephoto/data'
+  'cd /mnt/ssd/ccam/app && git checkout -f <previous-commit> && midclt call app.redeploy ccam'
 ```
+Data is additive (SQLite + files under `/mnt/ssd/ccam`), so rolling the code back never deletes events.
+Cloudflare routes can stay; without the app the tunnel returns its catch-all 404.
 
-## 1. Ship the code
+## Clients
 
-```bash
-# from the Mac, in app/
-git push -u origin ccam-tenants
-
-# on m10: pull the branch, rebuild/redeploy the app
-HOST=truenas_admin@100.101.43.120 BRANCH=ccam-tenants ./deploy/update.sh
-```
-
-`update.sh` checks out `origin/<BRANCH>` into `/mnt/ssd/livephoto/app` and runs
-`midclt call -j app.redeploy livephoto`, then waits for `/auth/config` to answer.
-
-Verify the app came up (no tunnel changes yet, so only via LAN):
-
-```bash
-ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 \
-  'curl -s -m3 http://127.0.0.1:8095/ | head -c 120; echo; midclt call app.query | grep -o "\"name\": \"livephoto\""'
-```
-
-## 2. Add the tunnel hostnames (Cloudflare dashboard — one time)
-
-Zero Trust → Networks → Tunnels → the m10 tunnel (`5d1680e1-a30b-4010-9d52-eeae3c7abac9`) → Public Hostnames:
-
-| Subdomain | Domain | Service type | URL |
-|---|---|---|---|
-| *(empty)* | `ccam.my` | HTTP | `192.168.0.100:8095` |
-| `*` | `ccam.my` | HTTP | `192.168.0.100:8095` |
-
-- Leave **Host Header** empty: cloudflared forwards the original `Host`, the app picks the tenant from it.
-- Delete any leftover A/AAAA records for `ccam.my` / `www.ccam.my` first (tunnel wants CNAMEs).
-- Do **not** attach Access to these routes: guests must open their gallery without a login.
-- SSL/TLS → Edge Certificates → **Always Use HTTPS: ON** (Universal SSL already covers `*.ccam.my`, one level).
-
-If the Cloudflare API token is available instead of the dashboard (needs `Zone:DNS:Edit`, `Account:Cloudflare Tunnel:Edit`),
-read the **whole** tunnel config first and merge — `PUT /accounts/{id}/cfd_tunnel/{tunnel}/configurations` replaces every ingress rule:
-
-```bash
-# read (never blind-PUT)
-curl -s -H "Authorization: Bearer $CF_TOKEN" \
-  "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/cfd_tunnel/$TUNNEL/configurations" | jq .
-```
-
-## 3. Verify routing (from any machine)
-
-```bash
-dig +short passion.ccam.my            # should return Cloudflare IPs (proxied)
-curl -sI https://ccam.my/ | head -1   # 302 -> https://live.johorstudio.com/ (APEX_MODE=redirect)
-curl -sI https://passion.ccam.my/ | head -1  # 404 page until the organiser is switched on (or 200 when live)
-curl -s https://ccam.my/cdn-cgi/trace | head -3
-```
-
-TLS check for the wildcard:
-
-```bash
-openssl s_client -connect passion.ccam.my:443 -servername passion.ccam.my </dev/null 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName
-```
-
-## 4. Create the first tenant (admin)
-
-1. Open `https://live.johorstudio.com/admin/organizers` (Cloudflare Access login).
-2. `+ New event organizer` → Company name + subdomain slug (`passion`).
-3. `Read website` → `https://passion-sound-event.com/` → pick name/logo/colours → *Apply*.
-   The measured Passion brand is already in `brands/passion/` (logo-primary white lockup for the dark header,
-   logo-horizontal for light surfaces, palette `#c50a76 / #8f288c / #ffc012 / #cc4a10`, font Raleway).
-4. Upload the logo(s) (≤4 MB, PNG/JPEG/WebP/SVG/GIF/ICO), set colours/font/WhatsApp/disclaimer.
-5. `Deploy (go live)` → status `live`. Open `https://passion.ccam.my`.
-6. Create the client's event in `/admin` with **Client = Passion Sound & Event** so its gallery/QR only opens on
-   `passion.ccam.my` (platform events stay on `live.johorstudio.com`).
-
-## 5. Rollback
-
-```bash
-ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 \
-  'cd /mnt/ssd/livephoto/app && git checkout -f main && midclt call -j app.redeploy livephoto'
-```
-
-- Old code ignores `organizer_id` / `organizers` (additive columns/tables stay; harmless).
-- Tunnel hostnames can stay: with the old code `ccam.my` would serve the JohorStudio app (no tenant branding).
-  Remove the two public hostnames if ccam.my must go dark.
-- DB restore (only if a migration misbehaves — it should not, schema version stays 2):
-  `cp livephoto.db.bak-* livephoto.db` then redeploy.
-
-## 6. Env on m10 (already in `deploy/compose.yaml`)
-
-```
-ADMIN_HOST=live.johorstudio.com
-PLATFORM_HOSTS=johorstudio.com,www.johorstudio.com
-TENANT_ZONE=ccam.my
-APEX_MODE=redirect          # or 'app' to serve the ccam.my apex brand
-BRANDS_DIR=/data/brands
-TENANT_DISCLAIMER=Servis disediakan oleh JohorStudio.com
-```
-
-Ad-hoc tests without the tunnel (m10 LAN / SSH port-forward):
-
-```bash
-curl -s -H 'Host: passion.ccam.my' http://127.0.0.1:8095/api/brand | jq '.name, .kind'
-curl -s -H 'Host: passion.ccam.my' http://127.0.0.1:8095/ | grep -o 'data-tenant="[^"]*"'
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: passion.ccam.my' http://127.0.0.1:8095/admin   # 302 to admin host
-```
+`https://ccam.my/admin/organizers` (Access login) → **+ New event organizer** → name + slug → **Read website**
+to import brand → logos/colours/font/hero photos → **Deploy (go live)**. `https://<slug>.ccam.my` is live
+immediately (wildcard DNS + tunnel are already in place). Turn off / delete from the same card.
