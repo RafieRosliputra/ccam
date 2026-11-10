@@ -374,7 +374,18 @@ function liveControls(e, admin) {
 }
 
 const ROLE_Q = { public: '', photographer: '?r=p', client: '?r=o' };
-const codeUrl = (key, value) => (key === 'photographer' ? `${location.origin}/join/${value}` : `${location.origin}/c/${value}${ROLE_Q[key] || ''}`);
+// Prefer the server-built URLs (they know the client's own <slug>.ccam.my host). Falling back to
+// location.origin keeps this working on the client panel and for old payloads.
+const evBase = () => {
+  const e = (cur && cur.event) || {};
+  try { return new URL(e.codeUrl || e.url || e.joinUrl || location.origin).origin; } catch { return location.origin; }
+};
+const codeUrl = (key, value) => {
+  const e = (cur && cur.event) || {};
+  if (key === 'photographer' && e.joinUrl) return e.joinUrl;
+  if (key === 'client' && e.organiserUrl) return e.organiserUrl;
+  return (key === 'photographer' ? `${evBase()}/join/${value}` : `${evBase()}/c/${value}${ROLE_Q[key] || ''}`);
+};
 function codeCard(label, key, value, admin, help) {
   const url = codeUrl(key, value);
   return `<div class="code"><span class="lbl">${label}</span><span class="num">${esc(fmtCode(value))}</span>

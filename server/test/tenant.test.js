@@ -287,6 +287,8 @@ test('platform events and client events never mix hosts', async () => {
   // admin-made links must point at the client's own domain, not the admin host
   assert.match(clientEv.json.event.codeUrl, /^https:\/\/passion\.ccam\.my\/c\/[0-9]{6}$/);
   assert.match(clientEv.json.event.url, /^https:\/\/passion\.ccam\.my\/e\//);
+  assert.match(clientEv.json.event.joinUrl, /^https:\/\/passion\.ccam\.my\/join\/[0-9]{6}$/);
+  assert.match(clientEv.json.event.organiserUrl, /^https:\/\/passion\.ccam\.my\/c\/[0-9]{6}\?r=o$/);
   const bad = await asJson('POST', '/api/admin/events', { date: '20261110', title: 'Nope', organizerId: 'nope' });
   assert.equal(bad.status, 400);
 

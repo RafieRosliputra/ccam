@@ -112,7 +112,9 @@ function staffEventJson(ev, role = 'admin') {
     id: ev.id, folder: ev.folder_name, date: ev.date, title: ev.title, organiser: ev.organiser, organizerId: ev.organizer_id || '', hideName: !!ev.hide_name,
     token: ev.public_token, url: galleryUrl(ev), status: db.status(ev), startsAt: ev.starts_at, endsAt: ev.ends_at, closedAt: ev.closed_at,
     codes: { public: ev.public_code, photographer: ev.photo_code, client: ev.client_code },
-    codeUrl: codeUrl(ev.public_code, ev), publicUpload: !!ev.public_upload_on, showcase: !!ev.showcase,
+    codeUrl: codeUrl(ev.public_code, ev), joinUrl: `${eventBase(ev)}/join/${ev.photo_code}`,
+    organiserUrl: `${eventBase(ev)}/c/${ev.client_code}?r=o`, dlUrl: `${eventBase(ev)}/d/${ev.dl_token}`,
+    publicUpload: !!ev.public_upload_on, showcase: !!ev.showcase,
     settings: db.settingsOf(ev), request: parseReq(ev), createdAt: ev.created_at, download: dlJson(ev, role), qrUntil: qrState(ev.id), screenMode: screenMode.get(ev.id) || 'photos', pin: pinState(ev.id), bg: bgInfo(ev),
     photoCount: c.photo_count || 0, guestCount: c.guest_count || 0, reviewCount: c.review_count || 0, blockedCount: c.blocked_count || 0,
   };
