@@ -36,6 +36,20 @@ raw files redirect to the clean (Access-protected) URLs. A client host only ever
   `ccam.my/admin` + `ccam.my/api/admin`, reusable policy **CCAM admins** (Allow, Emails
   `rafierosliputra@gmail.com`, `johorstudio@gmail.com`).
 
+## Analytics
+
+Umami website **CCAM** id `3b65bef6-9a72-4bbc-addf-702dd7ddc453` (ana.johorstudio.com) — script injected on
+index, livescreen, gallery, shoot, download and 404 pages (same website id for platform and client hosts;
+`data-domains` is the request host). Two synthetic `test` events were sent while verifying collection.
+
+## Backup
+
+`/mnt/ssd/ccam` is now its own ZFS dataset `ssd/ccam` (1.5 GB: app clone, SQLite data, brand logos, photos,
+moderator models). Periodic snapshot task **id 1**: `ccam-auto-%Y%m%d-%H%M`, 00:17 and 12:17, keep **15 days**;
+first snapshot `ssd/ccam@ccam-auto-20261110-2103`. The existing `/mnt/ssd/ssd-backup.sh` replica
+(`zfs send -R ssd` → `a/ssd-backup`) now includes `ssd/ccam` automatically, so there is also a 12-hourly
+off-pool copy. The temporary pre-dataset copy was verified and removed.
+
 ## Seeds
 
 - Platform brand persisted in `meta['brand:platform']` (name CCAM, graphite `#0b0f14`, accent `#f97316`).
@@ -51,10 +65,8 @@ with curl (above), and in a real browser through Access (organizer list returns 
 
 ## Remaining / follow-ups
 
-1. **Umami**: new website id for ccam not created yet (env `UMAMI_WEBSITE_ID` empty → analytics off).
-2. **Events**: none created; create in `/admin` with the client selected.
-3. **Photo storage**: currently `/mnt/ssd/ccam/photos` on m10 local disk. Moving to tnas NFS
+1. **Events**: none created; create in `/admin` with the client selected.
+2. **Photo storage**: currently `/mnt/ssd/ccam/photos` on the m10 dataset. Moving to tnas NFS
    (`/mnt/ssd/client-1month/ccam` per the plan) needs a root-run mount script on m10.
-4. **Backups**: existing m10 backup jobs do not cover `/mnt/ssd/ccam` yet — add before real client data.
-5. **Moderator**: first container boot downloads Python deps/models; verify photo moderation once real photos flow.
-6. Unused Worker script `ccam-under-construction` still exists in the account (no routes) — delete when convenient.
+3. **Moderator**: verify photo moderation once real photos flow (container is running; first boot downloads models).
+4. Optional: give the Umami website a friendlier domain list if client-host analytics need filtering.

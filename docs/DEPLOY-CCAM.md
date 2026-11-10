@@ -48,6 +48,18 @@ ssh -i ~/.ssh/truenas_claude truenas_admin@100.101.43.120 \
 Data is additive (SQLite + files under `/mnt/ssd/ccam`), so rolling the code back never deletes events.
 Cloudflare routes can stay; without the app the tunnel returns its catch-all 404.
 
+## Backup
+
+- Dataset `ssd/ccam` + periodic snapshot task id **1** (`ccam-auto-%Y%m%d-%H%M`, 00:17/12:17, keep 15 days).
+- `/mnt/ssd/ssd-backup.sh` (cron 00:17/12:17) replicates dataset `ssd` recursively to pool `a` → includes
+  `ssd/ccam`; keep 14 root snapshots.
+- Snapshot task settings: `midclt call pool.snapshottask.query`; run now with `midclt call pool.snapshottask.run 1`.
+
+## Analytics (Umami)
+
+Website **CCAM** id `3b65bef6-9a72-4bbc-addf-702dd7ddc453` on `ana.johorstudio.com`; env `UMAMI_WEBSITE_ID`
+in the app config controls it. Script is injected only on public pages via `umamiAllowed()` in `server.js`.
+
 ## Clients
 
 `https://ccam.my/admin/organizers` (Access login) → **+ New event organizer** → name + slug → **Read website**
