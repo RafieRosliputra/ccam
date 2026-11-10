@@ -6,7 +6,7 @@
 export default function create(ctx) {
   const { photos, img, pick, R, reduce, settings } = ctx;
   const W = () => innerWidth, H = () => innerHeight;
-  let root, grid, per = 4, pinnedId = null, idleTimer = null, popTimer = null, popEl = null, tagEl = null, busy = false;
+  let root, grid, per = 4, pinnedId = null, idleTimer = null, popTimer = null, popHandle = null, popEl = null, tagEl = null, busy = false;
 
   function injectCss() {
     if (document.getElementById('mod-carousel-css')) return;
@@ -90,6 +90,53 @@ export default function create(ctx) {
     }
     return [0.5, 0.42]; // faces usually middle / upper-middle
   }
+  function openPopup(p, tile, { pinned = false } = {}) {
+    const pop = root.querySelector('.car-pop');
+    const im = pop && pop.querySelector('img');
+    if (!pop || !im) return null;
+    const [fx, fy] = focusOf(p);
+    const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.3, top: H()*.3, width: W()*.4, height: H()*.4 };
+    im.src = img(p);
+    im.style.transition = 'none';
+    im.style.transform = 'none';
+    im.style.transformOrigin = '50% 50%';
+    im.style.objectFit = 'cover';
+    im.style.objectPosition = `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
+    pop.classList.add('on');
+    Object.assign(pop.style, { transition: 'none', left: r0.left + 'px', top: r0.top + 'px',
+      width: r0.width + 'px', height: r0.height + 'px', borderRadius: '.5vw' });
+    showTag(p);
+    // grow out of the carousel tile: you can see exactly where the photo comes from
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      pop.style.transition = 'left .55s cubic-bezier(.2,.8,.2,1), top .55s cubic-bezier(.2,.8,.2,1), width .55s cubic-bezier(.2,.8,.2,1), height .55s cubic-bezier(.2,.8,.2,1), border-radius .55s';
+      Object.assign(pop.style, { left: '0px', top: '0px', width: W() + 'px', height: H() + 'px', borderRadius: '0px' });
+    }));
+    // then a slow zoom anchored on the faces (works for landscape and portrait)
+    const zoomMs = Math.max(2200, (settings().loopSec || 5) * 700);
+    const zoom = () => {
+      im.style.transition = `transform ${zoomMs}ms cubic-bezier(.25,.6,.3,1)`;
+      im.style.transformOrigin = `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
+      im.style.transform = `scale(${reduce ? 1 : R(1.26, 1.34)})`;
+    };
+    setTimeout(zoom, 650);
+    return { pop, im, r0, zoomMs, pinned };
+  }
+  function closePopup(handle, done) {
+    if (!handle) return;
+    const { pop, im, zoomMs } = handle;
+    im.style.transition = `transform ${Math.min(600, zoomMs / 3)}ms ease-out`;
+    im.style.transform = 'none';
+    setTimeout(() => {
+      // go back into whichever tile holds this photo now (the columns keep scrolling, so re-measure)
+      const id = pop.dataset.id;
+      const tile = id ? grid && grid.querySelector(`.car-tile[data-id="${id}"]`) : null;
+      const r = tile ? tile.getBoundingClientRect() : handle.r0;
+      pop.style.transition = 'left .5s cubic-bezier(.2,.8,.2,1), top .5s cubic-bezier(.2,.8,.2,1), width .5s cubic-bezier(.2,.8,.2,1), height .5s cubic-bezier(.2,.8,.2,1), border-radius .5s';
+      Object.assign(pop.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', borderRadius: '.5vw' });
+      hideTag();
+      setTimeout(() => { pop.classList.remove('on'); im.style.transition = 'none'; im.style.transform = 'none'; im.style.objectPosition = '50% 50%'; if (done) done(); }, reduce ? 80 : 520);
+    }, reduce ? 60 : 420);
+  }
   function popOut() {
     if (busy || pinnedId || !grid) return;
     const ps = list();
@@ -97,33 +144,14 @@ export default function create(ctx) {
     const p = pick(ps);
     const tile = grid.querySelector(`.car-tile[data-id="${p.id}"]`);
     const pop = root.querySelector('.car-pop');
-    const im = pop.querySelector('img');
-    if (!pop || !im) return;
+    if (!pop) return;
     busy = true;
-    const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.3, top: H()*.3, width: W()*.4, height: H()*.4 };
-    im.style.transition = 'none';
-    im.style.transform = 'none';
-    im.src = img(p);
-    pop.classList.add('on');
-    im.style.objectFit = 'contain';
-    im.style.clipPath = `inset(${r0.top}px ${W() - r0.left - r0.width}px ${H() - r0.top - r0.height}px ${r0.left}px)`;
-    void im.offsetWidth;
-    im.style.transition = 'clip-path .55s cubic-bezier(.2,.8,.2,1)';
-    im.style.clipPath = 'inset(0 0 0 0)';
-    showTag(p);
-    const [fx, fy] = focusOf(p);
-    const zoomMs = Math.max(2500, (settings().loopSec || 5) * 900);
-    setTimeout(() => {
-      im.style.transition = `transform ${zoomMs}ms cubic-bezier(.25,.6,.3,1)`;
-      im.style.transformOrigin = `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
-      im.style.transform = `scale(${reduce ? 1 : R(1.26, 1.34)})`;
-    }, 620);
+    pop.dataset.id = p.id;
+    const handle = openPopup(p, tile);
+    if (!handle) { busy = false; return; }
     popTimer = setTimeout(() => {
-      im.style.transition = 'clip-path .5s cubic-bezier(.2,.8,.2,1)';
-      im.style.clipPath = `inset(${r0.top}px ${W() - r0.left - r0.width}px ${H() - r0.top - r0.height}px ${r0.left}px)`;
-      hideTag();
-      setTimeout(() => { pop.classList.remove('on'); im.style.transition = 'none'; im.style.transform = 'none'; im.style.clipPath = 'none'; busy = false; popTimer = null; }, reduce ? 100 : 520);
-    }, 620 + zoomMs);
+      closePopup(handle, () => { busy = false; popTimer = null; });
+    }, 650 + handle.zoomMs);
   }
   function scheduleIdle(ms = 5000) {
     clearTimeout(idleTimer);
@@ -154,7 +182,7 @@ export default function create(ctx) {
       if (!pin) {
         pinnedId = null;
         clearTimeout(popTimer); busy = false;
-        const pop = root.querySelector('.car-pop'); if (pop) pop.classList.remove('on');
+        if (popHandle) { closePopup(popHandle, () => { popHandle = null; }); popHandle = null; }
         hideTag();
         grid && grid.querySelectorAll('.car-track').forEach((t) => t.classList.remove('paused'));
         scheduleIdle(5000);
@@ -166,22 +194,15 @@ export default function create(ctx) {
       busy = false;
       grid && grid.querySelectorAll('.car-track').forEach((t) => t.classList.add('paused'));
       const p = ctx.photoById(pin.id); if (!p) return;
-      // pinned photo: same pop-up style, but it stays until released
-      const im = root.querySelector('.car-pop img'); const popEl2 = root.querySelector('.car-pop');
-      if (!im || !popEl2) return;
+      // pinned photo: same "grow out of the tile" animation, but it stays until released
       const tile = grid.querySelector(`.car-tile[data-id="${p.id}"]`);
-      const r0 = tile ? tile.getBoundingClientRect() : { left: W()*.3, top: H()*.3, width: W()*.4, height: H()*.4 };
-      im.src = img(p); im.style.transition = 'none'; im.style.transform = 'none'; im.style.clipPath = 'none';
-      popEl2.classList.add('on'); showTag(p);
-      const [fx, fy] = focusOf(p);
-      im.style.objectFit = 'contain';
-      im.style.clipPath = `inset(${r0.top}px ${W() - r0.left - r0.width}px ${H() - r0.top - r0.height}px ${r0.left}px)`;
-      void im.offsetWidth;
-      im.style.transition = 'clip-path .55s cubic-bezier(.2,.8,.2,1)';
-      im.style.clipPath = 'inset(0 0 0 0)';
-      setTimeout(() => { im.style.transition = 'transform 6s cubic-bezier(.25,.6,.3,1)'; im.style.transformOrigin = `${Math.round(fx*100)}% ${Math.round(fy*100)}%`; im.style.transform = `scale(${reduce ? 1 : 1.3})`; }, 600);
+      if (pop) pop.dataset.id = p.id;
+      popHandle = openPopup(p, tile, { pinned: true });
     },
     destroy() {
+      if (popTimer) clearTimeout(popTimer);
+      if (popHandle) { try { const el = root.querySelector('.car-pop'); if (el) el.classList.remove('on'); } catch { /* ignore */ } }
+
       clearTimeout(idleTimer); clearTimeout(popTimer); hideTag();
       if (popEl) { try { popEl.remove(); } catch { /* ignore */ } }
       if (root) root.innerHTML = '';

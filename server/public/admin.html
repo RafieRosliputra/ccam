@@ -278,7 +278,7 @@ function render() {
         ${[['photos', 'Photos'], ['black', 'Black'], ['admin', 'Admin background'], ['bg1', 'Background 1'], ['bg2', 'Background 2']].map(([k, l]) => `<button type="button" data-mode="${k}">${l}</button>`).join('')}
       </div>
       <div class="bub">
-        <div class="row" style="justify-content:space-between"><b>"Upload your photos!" message</b>
+        <div class="row" style="justify-content:space-between"><b>Main upload banner</b>
           <span class="row"><button class="btn small" id="bubNow" type="button">Show now</button>
           <button class="btn small ghost" id="bubOn" type="button" aria-pressed="${e.settings.bubbleOn !== false}">${e.settings.bubbleOn !== false ? 'Showing: on' : 'Hidden'}</button></span></div>
         <span class="small muted">Appears on the big screen when no new photo has come in for a while.</span>
