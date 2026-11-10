@@ -100,7 +100,7 @@ The big screen now has **three photo modules** and is extensible:
 | Module | What it does |
 |---|---|
 | `slides` (built-in) | the original one-photo-at-a-time slideshow (Ken Burns, polaroid background) |
-| `carousel` | exactly **two columns (left/right)** scrolling in opposite directions, filling the screen. A new photo slides straight into a column (no pop-up). After ~5 s without a new photo, a random photo pops out to full screen: the whole photo first (contain), then a ~30% zoom anchored on its faces / upper-middle, with the uploader tag 5 px above the footer; then it returns. A pinned photo pauses the columns and stays popped-out until released |
+| `carousel` | exactly **two columns (left/right)** scrolling in opposite directions, filling the screen. A new photo slides straight into a column (no pop-up). After ~5 s without a new photo, a random photo **grows out of its own carousel tile** (its rectangle animates from the tile to full screen, so it is obvious where it came from), then a ~30% zoom anchored on the face area (`object-position` + `transform-origin`, so landscape and portrait photos both keep the faces in view), with the uploader tag 5 px above the footer; then it shrinks back into the tile. A pinned photo pauses the columns and stays popped-out until released |
 | `cinema` | a huge hero photo with a slowly moving filmstrip underneath. A new photo flies into the strip and then takes over the hero; a pinned photo pops up full screen and returns to the strip |
 
 Modules are **plugin files**: `/modules/<id>.js`, each exporting
@@ -110,6 +110,11 @@ Modules are **plugin files**: `/modules/<id>.js`, each exporting
 `ccam.my/admin` → event → Big screen → **Upload module** (file name becomes the module id, max 200 KB).
 Uploaded files live in `DATA_DIR/modules/` and are served at `/modules/<id>.js`.
 
+- Layers are named CSS variables so a module author can re-order them: `--z-module` (3), `--z-overlay` (5),
+  `--z-footer` (6), `--z-tag` (7), `--z-banner` (9). Override them inside the module's own `<style>`, e.g.
+  `:root { --z-module: 9; }`. The **Main upload banner** (the big "Upload your photos!" message) is above the
+  modules by default; hide it per event in the panel: Big screen → **Main upload banner** → **Banner: shown/hidden**
+  (API: `POST /api/{admin|client}/events/<id>/bubble` with `{on:false}`).
 - Panel: **Photo module** buttons (Slideshow / Carousel / Cinema / uploaded ones). The choice is stored on the
   event (`settings.module`, survives restart) and published over SSE (`module`), so every screen for that event
   switches. Uploaded modules are marked with `*`.
