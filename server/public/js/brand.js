@@ -131,13 +131,14 @@
       var added = records[i].addedNodes;
       for (var j = 0; j < added.length; j++) {
         var n = added[j];
-        if (n.nodeType === 3) { if (/johorstudio/i.test(n.nodeValue) && !(n.parentNode && SKIP[n.parentNode.nodeName])) n.nodeValue = replaceText(n.nodeValue); }
+        if (n.nodeType === 3) { if (/johorstudio/i.test(n.nodeValue) && !(n.parentNode && SKIP[n.parentNode.nodeName]) && !(n.parentNode && n.parentNode.closest && n.parentNode.closest('[data-brand-lock]'))) n.nodeValue = replaceText(n.nodeValue); }
         else if (n.nodeType === 1) { fixSubtree(n); }
       }
     }
   });
   function fixSubtree(root) {
     if (!root.querySelectorAll) return;
+    if (root.closest && root.closest('[data-brand-lock]')) return;
     root.querySelectorAll('.brand-name').forEach(function (el) { if (/johorstudio/i.test(el.textContent)) el.textContent = replaceText(el.textContent); });
     root.querySelectorAll('a[href]').forEach(function (a) {
       if (isPlatformLink(a) && !a.hasAttribute('data-platform-credit') && B.website) a.setAttribute('href', B.website);
@@ -172,6 +173,7 @@
         var list = (d && d.clients) || [];
         var grid = document.getElementById('clientGrid');
         if (!list.length || !grid) return;
+        section.setAttribute('data-brand-lock', '1');
         grid.innerHTML = list.map(function (c) {
           var logo = c.logo ? '<img src="' + attr(c.logo) + '" alt="" loading="lazy">' : '<span class="cc-initial">' + escHtml((c.name || c.slug || '?').slice(0, 1)) + '</span>';
           return '<a class="clientcard" href="' + attr(c.url) + '" target="_blank" rel="noopener" style="--cc:' + attr(c.color || '#111827') + '">' + logo + '<b>' + escHtml(c.name || c.slug) + '</b><small>' + escHtml(c.slug + '.ccam.my') + '</small></a>';
