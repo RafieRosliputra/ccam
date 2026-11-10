@@ -94,18 +94,23 @@ export default function create(ctx) {
     const row = rowsBox.children[rowIdx];
     const track = row.querySelector('.cine-track');
     if (!track || !track.children.length) return fill();
-    const half = Math.floor(track.children.length / 2);
+    const kids = [...track.children];
+    const half = Math.floor(kids.length / 2);
     const per = Math.max(1, half);
-    const at = 1 + Math.floor(Math.random() * Math.max(1, per - 1));
+    // only slot into a gap that is currently on screen, so the photo visibly joins the row
+    const visible = kids.slice(0, half).filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.left > W() * 0.05 && r.left < W() * 0.85;
+    });
+    const anchor = visible.length ? pick(visible) : (kids[1 + Math.floor(Math.random() * Math.max(1, per - 1))] || kids[0]);
+    const at = Math.max(0, kids.indexOf(anchor));
     const node = document.createElement('div'); node.innerHTML = tileHtml(p, 'in'); const tile = node.firstElementChild;
     tile.style.visibility = 'hidden';
     const twin = tile.cloneNode(true); twin.style.visibility = 'hidden';
-    const twinRef = track.children[half + at] || null;
-    track.insertBefore(tile, track.children[at] || null);
-    track.insertBefore(twin, twinRef);
+    track.insertBefore(tile, anchor || null);
+    track.insertBefore(twin, track.children[at + per] || null);
     emptyState();
     showTag(p);
-    const target = tile.getBoundingClientRect();
     // flyer starts small at a random edge
     const edge = pick(['top', 'bottom', 'left', 'right']);
     const w0 = 16 * W() / 100, h0 = w0 * 0.75;
@@ -127,8 +132,9 @@ export default function create(ctx) {
     }));
     // 2) then slide into the gap between two photos
     setTimeout(() => {
+      const t2 = tile.getBoundingClientRect(); // measure again: the row has moved since the drop started
       Object.assign(fly.style, { transition: `left .75s cubic-bezier(.4,0,.2,1), top .75s cubic-bezier(.4,0,.2,1), width .75s cubic-bezier(.4,0,.2,1), height .75s cubic-bezier(.4,0,.2,1), border-radius .5s` });
-      Object.assign(fly.style, { left: target.left + 'px', top: target.top + 'px', width: target.width + 'px', height: target.height + 'px', borderRadius: '.5vw' });
+      Object.assign(fly.style, { left: t2.left + 'px', top: t2.top + 'px', width: t2.width + 'px', height: t2.height + 'px', borderRadius: '.5vw' });
     }, reduce ? 120 : 520);
     setTimeout(() => {
       fly.remove();
