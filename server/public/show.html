@@ -397,6 +397,7 @@ async function showPinned() {
 
 let gen = 0; // only the newest call of next() may change the screen
 async function next() {
+  if (moduleId !== 'slides') return;   // a photo module is showing; its own engine renders the photos
   clearTimeout(loopTimer);
   const my = ++gen;
   if (pinned && pinned.until && pinned.until <= Date.now()) pinned = null;
@@ -437,6 +438,7 @@ function showPhotoTag(p) {
 }
 
 async function showNew() {
+  if (moduleId !== 'slides') return;
   clearTimeout(loopTimer);
   ++gen;
   const p = queue.shift();
@@ -517,6 +519,7 @@ function addPhoto(p) {
   loop.push(p);
   queue.push(p);
   modAdd(p);
+  if (moduleId !== 'slides') return;   // don't run the slideshow's NEW animation behind a module
   lastNewAt = Date.now();
   bubbleUntil = 0;
   $('#bubble').classList.add('hidden');
@@ -659,7 +662,9 @@ async function setModule(id) {
   document.body.dataset.layout = id === 'slides' ? 'slides' : 'module';
   if (root) { root.hidden = id === 'slides'; root.innerHTML = ''; }
   clearPhotoTag();
-  if (id === 'slides') return;
+  clearTimeout(loopTimer);
+  gen += 1;
+  if (id === 'slides') { if (loopList.length) next(); return; }
   injectModuleCoreCss();
   try {
     moduleSeq += 1;
