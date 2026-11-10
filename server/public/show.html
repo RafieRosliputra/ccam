@@ -108,6 +108,8 @@
   <div class="main" id="main"></div>
   <div class="empty hidden" id="empty"><h1 id="emptyTitle">Photos will appear here</h1><p>Take a photo and send it to the live gallery.</p></div>
   <div class="bubble hidden" id="bubble">Upload your photos!</div>
+  <div class="mod" id="modRoot" data-mod="module" hidden></div>
+  <div class="mod-overlay" id="modOverlay"><img id="modOverlayImg" alt=""></div>
   <footer id="foot"><span class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
     <span>Upload your photo</span><span class="dot"></span><span class="url" id="url">ccam.my</span><span class="dot"></span>
     <span class="codewrap">Code <span class="digits" id="code"></span></span></footer>
@@ -115,8 +117,6 @@
     <div class="qrtext"><span class="k">LIVE PHOTO</span><h2>Scan to send your photos</h2><p>or open <span class="u" id="qrHost">ccam.my</span> and enter</p><span class="c" id="qrCode"></span></div></div></div>
 </div>
 
-<div class="mod" id="modRoot" data-mod="module" hidden></div>
-<div class="mod-overlay" id="modOverlay"><img id="modOverlayImg" alt=""></div>
 <div class="controls" id="controls"><button id="fsBtn" type="button">Full screen</button></div>
 <div class="msg hidden" id="msg"></div>
 <div class="blackout" id="blackout" aria-hidden="true"></div>
@@ -585,7 +585,7 @@ function injectModuleCoreCss() {
     body:not([data-layout="slides"]) #main, body:not([data-layout="slides"]) #scatter, body:not([data-layout="slides"]) #empty { display: none; }
     #modRoot { position:absolute; inset:0; z-index:3; overflow:hidden; }
     #modRoot[hidden] { display:none; }
-    .mod-overlay { position:fixed; inset:0; z-index:14; display:none; background:rgba(3,5,6,.9); }
+    .mod-overlay { position:fixed; inset:0; z-index:5; display:none; background:rgba(3,5,6,.9); }
     .mod-overlay.on { display:block; }
     .mod-overlay img { position:fixed; display:block; object-fit:cover; box-shadow:0 4vw 12vw rgba(0,0,0,.7); will-change:left,top,width,height; }
   `;
