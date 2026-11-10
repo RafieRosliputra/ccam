@@ -129,7 +129,9 @@ let base = null; // '/api/admin' or '/api/client'
 let settings = { newSec: 3, loopSec: 5, loopSource: 'all', idleMin: 3 };
 let loop = [], idx = -1, queue = [], showingNew = false, lastNewAt = Date.now(), loopTimer = null;
 const seen = new Set();
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Big-screen showcase: keep the grow/zoom animations even when the OS/browser asks for reduced motion
+// (macOS "Reduce Motion" was silently disabling the slideshow zoom and carousel pop animation).
+const reduce = false;
 const R = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
