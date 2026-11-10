@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Enter the 6-digit event code shown on the screen to open your event gallery.">
+<meta name="theme-color" content="#0b0f14">
+<title>Enter your event code · CCAM</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/site.css">
+<style>
+  .livehead { padding: 34px 0 10px; }
+  .livehead .kicker { font-size: 13px; letter-spacing: .14em; color: var(--teal); font-weight: 600; }
+  .livehead h1 { margin: 6px 0 10px; font-size: clamp(30px, 5vw, 44px); font-stretch: 85%; line-height: 1.05; }
+  .livebox { background: #fff; border: 1px solid var(--mist); border-radius: 14px; box-shadow: var(--shadow); padding: 24px; display: flex; flex-direction: column; gap: 14px; max-width: 520px; }
+  .codewrap .codeinput { font-size: 28px; letter-spacing: .18em; text-align: center; font-variant-numeric: tabular-nums; padding: 14px 12px; }
+  .codewrap.bad .codeinput { border-color: var(--tally); }
+  .livelist { display: flex; flex-direction: column; gap: 10px; }
+  .liverow { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 12px 14px; background: #fff; border: 1px solid var(--mist); border-radius: 10px; }
+  .liverow b { font-size: 15px; }
+  .liverow span { color: var(--steel); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CCAM"><span class="brand-name">CCAM</span><span class="live-badge">LIVE</span></a>
+    <nav><a href="/">Home</a><a href="/livescreen">Livescreen</a></nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="livehead">
+    <div class="kicker">LIVE PHOTO</div>
+    <h1>Enter your event code</h1>
+    <p class="muted" style="margin:0">The 6-digit code is shown on the screen at the event. Scan the QR code or type the code to open your gallery.</p>
+  </section>
+
+  <section class="livebox">
+    <div id="boxes"></div>
+    <p class="error" id="err" style="margin:0;min-height:20px"></p>
+    <div class="row"><button class="btn" id="go" type="button">Open gallery</button></div>
+  </section>
+
+  <section id="liveNow" class="hidden" style="padding:36px 0 10px">
+    <h2 style="font-size:22px;margin:0 0 12px">Events live now</h2>
+    <div class="livelist" id="liveList"></div>
+  </section>
+</main>
+
+<footer class="site"><div class="wrap"><div>© <span id="yr"></span> CCAM</div></div></footer>
+
+<script type="module">
+import { $, esc } from '/js/common.js';
+import { codeBoxes, sendCode } from '/js/codebox.js';
+
+$('#yr').textContent = new Date().getFullYear();
+let busy = false;
+const boxes = codeBoxes($('#boxes'), {
+  onChange: () => { $('#err').textContent = ''; },
+  onComplete: () => submit(),
+});
+async function submit() {
+  if (busy) return;
+  const code = boxes.get();
+  if (code.length !== 6) { $('#err').textContent = 'Enter the 6-digit code.'; boxes.focus(); return; }
+  busy = true; $('#go').disabled = true;
+  try {
+    const r = await sendCode(code, { want: 'guest' });
+    location.href = r.next;
+  } catch (e) {
+    if (e.status === 401) boxes.clear();
+    $('#err').textContent = e.message;
+    boxes.shake();
+  } finally { busy = false; $('#go').disabled = false; }
+}
+$('#go').onclick = submit;
+boxes.focus();
+
+fetch('/api/live-status').then((r) => r.json()).then((d) => {
+  const live = (d && d.live) || [];
+  if (!live.length) return;
+  $('#liveNow').classList.remove('hidden');
+  $('#liveList').innerHTML = live.map((e) => `<div class="liverow"><b>${esc(e.name)}</b>${e.organiser ? `<span>${esc(e.organiser)}</span>` : ''}</div>`).join('');
+}).catch(() => { /* the list is optional */ });
+</script>
+</body>
+</html>

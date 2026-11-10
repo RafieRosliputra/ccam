@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Big screen · JohorStudio.com Live</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  /* Big screen (LED / projector): always dark, designed 16:9, works in portrait. */
+  :root { --bg: #0d1113; --ink: #f5f7f7; --muted: #9fb0b2; --teal: #6cc4b9; --tally: #e0564e; --bar: rgba(13,17,19,.82); color-scheme: dark;
+    --font: Archivo, system-ui, sans-serif;
+    --u: 1vw; /* footer unit: 1vw on 16:9, bigger on portrait */ }
+  .portrait { --u: 2.2vw; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); overflow: hidden; }
+  .stage { position: fixed; inset: 0; }
+  /* Background: small polaroids scattered and drifting, dimmed so the main photo stands out. */
+  .scatter { position: absolute; inset: -6vh -6vw; overflow: hidden; }
+  .pol { position: absolute; width: 13vw; padding: .5vw .5vw 1.6vw; background: #f4f1ea; border-radius: 3px; box-shadow: 0 1vw 2.4vw rgba(0,0,0,.55);
+    opacity: .34; filter: blur(1.2px) saturate(.85); will-change: transform; }
+  .portrait .pol { width: 24vw; }
+  .pol:not(.has) { visibility: hidden; }
+  .pol img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; transition: opacity 1.2s; }
+  .scatter::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(13,17,19,.35), rgba(13,17,19,.85)); }
+  /* Main photo: the frame moves in/out, the inner .kb layer does the slow zoom / pan. */
+  .main { position: absolute; inset: 3vh 3vw calc(var(--u) * 6.4); }
+  .frame { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; }
+  .kb { width: 100%; height: 100%; overflow: hidden; border-radius: .5vw; box-shadow: 0 2vw 6vw rgba(0,0,0,.6); will-change: transform; }
+  .kb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .tag { position: absolute; left: 1.2vw; bottom: 1.2vw; display: flex; align-items: center; gap: .8vw; background: rgba(13,17,19,.72); backdrop-filter: blur(8px);
+    padding: .5vw 1vw .5vw .6vw; border-radius: 999px; font-weight: 700; font-size: max(14px, calc(var(--u) * 1.3)); transition: opacity .4s; }
+  .tag b { background: var(--tally); color: #fff; letter-spacing: .12em; padding: .15em .6em; border-radius: 999px; font-size: .85em; }
+  /* Footer: floating glass pill. Camera "clicks" with a flash, URL shimmers, code digits hop one by one. */
+  footer { position: absolute; left: 50%; bottom: calc(var(--u) * 1.1); transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: calc(var(--u) * 1.1);
+    padding: calc(var(--u) * .55) calc(var(--u) * 1.4) calc(var(--u) * .55) calc(var(--u) * .6); border-radius: 999px; background: rgba(15,20,22,.62);
+    -webkit-backdrop-filter: blur(calc(var(--u) * 1.2)); backdrop-filter: blur(calc(var(--u) * 1.2)); border: 1px solid rgba(255,255,255,.18);
+    font-size: max(13px, calc(var(--u) * 1.35)); font-weight: 700; white-space: nowrap; box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0,0,0,.4); }
+  footer .cam { width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); min-width: 24px; min-height: 24px; border-radius: 50%; background: var(--tally); display: grid; place-items: center; position: relative; flex: none; }
+  footer .cam svg { width: 55%; height: 55%; }
+  footer .cam::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #fff; opacity: 0; }
+  footer .dot { width: calc(var(--u) * .35); height: calc(var(--u) * .35); min-width: 4px; min-height: 4px; border-radius: 50%; background: rgba(255,255,255,.35); }
+  footer .url { background: linear-gradient(100deg, var(--teal) 0 40%, #fff 50%, var(--teal) 60% 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; }
+  footer .codewrap { display: flex; align-items: center; gap: calc(var(--u) * .35); }
+  footer .digits { display: flex; gap: calc(var(--u) * .22); }
+  footer .digits b { display: grid; place-items: center; width: 1.37em; height: 1.7em; border-radius: .3em; background: #fff; color: #1d2528; font-size: 1.07em; font-weight: 900; font-variant-numeric: tabular-nums; }
+  footer .digits b:nth-child(4) { margin-left: .37em; }
+  @media (prefers-reduced-motion: no-preference) {
+    footer .cam { animation: camPop 4s ease-in-out infinite; }
+    footer .cam::after { animation: flash 4s ease-out infinite; }
+    footer .url { animation: shimmer 3.2s linear infinite; }
+    footer .digits b { animation: hop 4s ease-in-out infinite; }
+    footer .digits b:nth-child(2) { animation-delay: .08s; } footer .digits b:nth-child(3) { animation-delay: .16s; }
+    footer .digits b:nth-child(4) { animation-delay: .24s; } footer .digits b:nth-child(5) { animation-delay: .32s; } footer .digits b:nth-child(6) { animation-delay: .4s; }
+  }
+  @keyframes camPop { 0%, 80%, 100% { transform: scale(1); } 86% { transform: scale(1.18) rotate(-8deg); } 92% { transform: scale(.95); } }
+  @keyframes flash { 0%, 84% { opacity: 0; } 86% { opacity: .9; } 96%, 100% { opacity: 0; } }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+  @keyframes hop { 0%, 70%, 100% { transform: translateY(0); } 78% { transform: translateY(-.4em); } 86% { transform: translateY(.07em); } }
+  /* QR popup, started from the admin / organiser panel */
+  .qrpop { position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; background: rgba(8,11,12,.55); opacity: 0; pointer-events: none; transition: opacity .5s; }
+  .qrpop.on { opacity: 1; }
+  .qrcard { background: #fff; color: #1d2528; border-radius: calc(var(--u) * 1.6); padding: calc(var(--u) * 2) calc(var(--u) * 2.6); display: flex; align-items: center; gap: calc(var(--u) * 2.4);
+    box-shadow: 0 3vw 8vw rgba(0,0,0,.6); transform: scale(.85); transition: transform .5s cubic-bezier(.2,.9,.3,1.3); }
+  .qrpop.on .qrcard { transform: scale(1); }
+  .qrcard img { width: min(30vw, 52vh); height: auto; image-rendering: pixelated; }
+  .qrtext { display: flex; flex-direction: column; gap: calc(var(--u) * .8); max-width: 34vw; }
+  .qrtext .k { color: var(--tally); font-weight: 800; letter-spacing: .14em; font-size: calc(var(--u) * 1.3); }
+  .qrtext h2 { margin: 0; font-size: calc(var(--u) * 3.6); line-height: 1.05; font-stretch: 85%; }
+  .qrtext p { margin: 0; font-size: calc(var(--u) * 1.6); color: #4a585d; }
+  .qrtext .c { font-size: calc(var(--u) * 4.4); font-weight: 900; letter-spacing: .08em; font-variant-numeric: tabular-nums; color: #1d2528; }
+  .qrtext .u { color: #1f6f68; font-weight: 800; }
+  .portrait .qrcard { flex-direction: column; text-align: center; } .portrait .qrtext { max-width: 80vw; } .portrait .qrcard img { width: 60vw; }
+  .bubble { position: absolute; left: 50%; bottom: calc(var(--u) * 7); transform: translateX(-50%); background: var(--tally); color: #fff; font-weight: 800; font-size: clamp(22px, 4.2vw, 90px);
+    padding: .35em .9em; border-radius: 1em; box-shadow: 0 10px 50px rgba(224,86,78,.55); z-index: 7; max-width: 86vw; text-align: center; text-wrap: balance; }
+  @media (prefers-reduced-motion: no-preference) { .bubble { animation: bob 1.4s ease-in-out infinite; } }
+  @keyframes bob { 0%, 100% { transform: translateX(-50%) scale(.9); } 50% { transform: translateX(-50%) scale(1.08); } }
+  .empty { position: absolute; inset: 0 0 calc(var(--u) * 6); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; text-align: center; padding: 4vw; }
+  .empty h1 { margin: 0; font-size: clamp(28px, 5vw, 110px); font-stretch: 80%; }
+  .empty p { margin: 0; color: var(--muted); font-size: clamp(16px, 2vw, 44px); }
+  .controls { position: absolute; top: 12px; right: 12px; z-index: 9; display: flex; gap: 8px; transition: opacity .4s; }
+  .controls button { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 8px 12px; font: 600 14px var(--font); cursor: pointer; }
+  body.idle-mouse .controls { opacity: 0; }
+  body.idle-mouse { cursor: none; }
+  .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; font-size: 20px; z-index: 20; background: var(--bg); }
+  .hidden { display: none !important; }
+  /* Big screen switched off from the panel: plain black, fades in / out */
+  .blackout { position: fixed; inset: 0; z-index: 30; background: #000 center / cover no-repeat; opacity: 0; pointer-events: none; transition: opacity .8s; }
+  .blackout.on { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="scatter" id="scatter"></div>
+  <div class="main" id="main"></div>
+  <div class="empty hidden" id="empty"><h1 id="emptyTitle">Photos will appear here</h1><p>Take a photo and send it to the live gallery.</p></div>
+  <div class="bubble hidden" id="bubble">Upload your photos!</div>
+  <footer id="foot"><span class="cam"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+    <span>Upload your photo</span><span class="dot"></span><span class="url" id="url">live.johorstudio.com</span><span class="dot"></span>
+    <span class="codewrap">Code <span class="digits" id="code"></span></span></footer>
+  <div class="qrpop" id="qrpop" aria-hidden="true"><div class="qrcard"><img id="qrImg" alt="">
+    <div class="qrtext"><span class="k">LIVE PHOTO</span><h2>Scan to send your photos</h2><p>or open <span class="u" id="qrHost">live.johorstudio.com</span> and enter</p><span class="c" id="qrCode"></span></div></div></div>
+</div>
+<div class="controls" id="controls"><button id="fsBtn" type="button">Full screen</button></div>
+<div class="msg hidden" id="msg"></div>
+<div class="blackout" id="blackout" aria-hidden="true"></div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const eventId = location.pathname.split('/')[2];
+let base = null; // '/api/admin' or '/api/client'
+let settings = { newSec: 3, loopSec: 5, loopSource: 'all', idleMin: 3 };
+let loop = [], idx = -1, queue = [], showingNew = false, lastNewAt = Date.now(), loopTimer = null;
+const seen = new Set();
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const R = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const img = (p, size = 1600) => `${base}/events/${eventId}/photos/${p.id}/img/${size}`;
+const fits = (p) => p.status === 'approved' && !p.hidden && (settings.loopSource === 'all' || (settings.loopSource === 'public' ? p.src === 'public' : p.src !== 'public'));
+const fmtCode = (c) => c ? `${c.slice(0, 3)} ${c.slice(3)}` : '— —';
+const setCode = (c) => { $('#code').innerHTML = (c || '------').split('').map((d) => `<b>${d === '-' ? '–' : d}</b>`).join(''); };
+let curCode = '';
+
+function fail(text) { $('#msg').textContent = text; $('#msg').classList.remove('hidden'); }
+
+async function get(url) {
+  const r = await fetch(url, { credentials: 'same-origin' });
+  if (!r.ok) { const e = new Error((await r.json().catch(() => ({}))).error || r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+
+async function boot() {
+  let info;
+  for (const b of ['/api/client', '/api/admin']) {
+    try { info = await get(`${b}/events/${eventId}`); base = b; break; } catch { /* try next */ }
+  }
+  if (!info) return fail('Open this screen from the admin or organiser panel.');
+  applyEvent(info.event);
+  let all = [], before = null;
+  for (let i = 0; i < 20; i++) {
+    const q = new URLSearchParams({ filter: 'visible' }); if (before) q.set('before', before);
+    const page = (await get(`${base}/events/${eventId}/photos?${q}`)).photos;
+    all.push(...page);
+    if (page.length < 120) break;
+    before = Math.min(...page.map((p) => p.seq));
+  }
+  all.forEach((p) => seen.add(p.id));
+  loop = all.sort((a, b) => a.seq - b.seq);
+  rebuildLoop();
+  buildScatter();
+  if (pinFromEvent) setPin(pinFromEvent);
+  next();
+  connect();
+  setInterval(bubbleTick, 1000);
+}
+
+function applyEvent(ev) {
+  settings = { ...settings, ...ev.settings };
+  if (ev.codes?.public !== curCode) { curCode = ev.codes?.public || ''; setCode(curCode); }
+  if (ev.qrUntil && ev.qrUntil > qrShownUntil) showQr(ev.qrUntil, curCode);
+  setScreen(ev.screenMode || 'photos');
+  pinFromEvent = ev.pin || null;
+  $('#url').textContent = (ev.url || '').replace(/^https?:\/\//, '').split('/')[0] || 'live.johorstudio.com';
+  $('#emptyTitle').textContent = ev.title ? `${ev.title}` : 'Photos will appear here';
+  document.title = `${ev.title} · Big screen`;
+}
+let loopList = [];
+function rebuildLoop() {
+  loopList = loop.filter(fits);
+  $('#empty').classList.toggle('hidden', loopList.length > 0 || showingNew);
+}
+
+// ---------- background: scattered polaroids drifting slowly ----------
+const pols = [];
+function buildScatter() {
+  const box = $('#scatter');
+  const n = innerHeight > innerWidth ? 12 : 18;
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.className = 'pol';
+    el.innerHTML = '<img alt="">';
+    // spread on a loose grid so they cover the screen, then jitter
+    const cols = innerHeight > innerWidth ? 3 : 6, row = Math.floor(i / cols), col = i % cols;
+    el.style.left = `${(col / cols) * 100 + R(-4, 6)}%`;
+    el.style.top = `${(row / Math.ceil(n / cols)) * 100 + R(-6, 6)}%`;
+    box.appendChild(el);
+    pols.push(el);
+    drift(el);
+  }
+  fillScatter();
+  setInterval(() => { const el = pick(pols); swapPol(el); }, 5000);
+}
+function drift(el) {
+  if (reduce) { el.style.transform = `rotate(${R(-14, 14)}deg)`; return; }
+  const r0 = R(-16, 16), dx = R(-5, 5), dy = R(-5, 5);
+  el.animate([
+    { transform: `translate(0,0) rotate(${r0}deg)` },
+    { transform: `translate(${dx}vw,${dy}vh) rotate(${r0 + R(-6, 6)}deg)` },
+    { transform: `translate(${-dx * .6}vw,${dy * .8}vh) rotate(${r0 + R(-6, 6)}deg)` },
+    { transform: `translate(0,0) rotate(${r0}deg)` },
+  ], { duration: R(50, 95) * 1000, iterations: Infinity, easing: 'ease-in-out', delay: -R(0, 60) * 1000 });
+}
+function swapPol(el) {
+  if (!loopList.length) return;
+  const i = el.querySelector('img');
+  const p = pick(loopList);
+  const pre = new Image();
+  pre.onload = () => { i.style.opacity = 0; setTimeout(() => { i.src = pre.src; i.style.opacity = 1; el.classList.add('has'); }, 1200); };
+  pre.src = img(p, 480);
+}
+function fillScatter() {
+  if (!loopList.length) return;
+  const order = loopList.slice().sort(() => Math.random() - .5);
+  pols.forEach((el, k) => { const i = el.querySelector('img'); i.onload = () => el.classList.add('has'); i.src = img(order[k % order.length], 480); });
+}
+
+// ---------- geometry ----------
+// The frame is the photo fitted inside .main; .kb scales/pans inside it.
+function fitBox(p) {
+  const m = $('#main'), W = m.clientWidth, H = m.clientHeight;
+  const w = p.w || 3, h = p.h || 2, s = Math.min(W / w, H / h);
+  return { W, H, w: w * s, h: h * s };
+}
+// Where to look: the centre of the faces (bigger faces count more), else the upper third.
+function focusOf(p) {
+  if (p.fc?.length) {
+    let sx = 0, sy = 0, sw = 0;
+    for (const [x0, y0, x1, y1] of p.fc) { const a = (x1 - x0) * (y1 - y0); sx += (x0 + x1) / 2 * a; sy += (y0 + y1) / 2 * a; sw += a; }
+    return [sx / sw, sy / sw];
+  }
+  return [0.5, 0.4];
+}
+// transform for .kb at scale s looking at focus f (clamped so no edge comes inside the frame)
+function look(box, s, f) {
+  const mx = (box.w * (s - 1)) / 2, my = (box.h * (s - 1)) / 2;
+  const tx = Math.max(-mx, Math.min(mx, (0.5 - f[0]) * box.w * s));
+  const ty = Math.max(-my, Math.min(my, (0.5 - f[1]) * box.h * s));
+  return `translate(${tx}px,${ty}px) scale(${s})`;
+}
+
+// ---------- frames ----------
+let cur = null; // { el, kb, p, box, kbAnim }
+function makeFrame(p, src) {
+  const box = fitBox(p);
+  const el = document.createElement('div');
+  el.className = 'frame';
+  Object.assign(el.style, { width: `${box.w}px`, height: `${box.h}px`, marginLeft: `${-box.w / 2}px`, marginTop: `${-box.h / 2}px` });
+  el.innerHTML = '<div class="kb"><img alt=""></div>';
+  el.querySelector('img').src = src;
+  $('#main').appendChild(el);
+  return { el, kb: el.firstChild, p, box };
+}
+function loadImg(src) { return new Promise((r) => { const i = new Image(); i.onload = i.onerror = () => r(i); i.src = src; }); }
+
+// slow movement while a photo is on screen: zoom in / zoom out / pan, aimed at faces
+function kenBurns(f, ms, { faces = false } = {}) {
+  if (reduce) return;
+  const fo = focusOf(f.p), mid = [0.5, 0.5];
+  const kinds = faces && f.p.fc?.length ? ['in', 'in', 'out', 'pan'] : ['in', 'out', 'panx', 'pany'];
+  const k = pick(kinds);
+  let a, b;
+  if (k === 'in') { a = look(f.box, 1, mid); b = look(f.box, R(1.08, 1.16), fo); }
+  else if (k === 'out') { a = look(f.box, R(1.1, 1.16), fo); b = look(f.box, 1.01, mid); }
+  else {
+    const s = 1.14, horiz = k === 'panx' || (k === 'pan' && f.box.w >= f.box.h), d = Math.random() < .5 ? -1 : 1;
+    const p0 = horiz ? [0.5 - 0.4 * d, fo[1]] : [fo[0], 0.5 - 0.4 * d], p1 = horiz ? [0.5 + 0.4 * d, fo[1]] : [fo[0], 0.5 + 0.4 * d];
+    a = look(f.box, s, p0); b = look(f.box, s, p1);
+  }
+  f.kbAnim = f.kb.animate([{ transform: a }, { transform: b }], { duration: ms, easing: 'ease-in-out', fill: 'forwards' });
+}
+
+// fluid ways in and out for the slideshow
+const IN = [
+  () => [{ opacity: 0 }, { opacity: 1 }],
+  () => [{ opacity: 0, transform: 'translateX(6vw)' }, { opacity: 1, transform: 'none' }],
+  () => [{ opacity: 0, transform: 'translateX(-6vw)' }, { opacity: 1, transform: 'none' }],
+  () => [{ opacity: 0, transform: 'translateY(6vh)' }, { opacity: 1, transform: 'none' }],
+  () => [{ opacity: 0, transform: 'translateY(-6vh)' }, { opacity: 1, transform: 'none' }],
+  () => [{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'none' }],
+  () => [{ opacity: 0, transform: 'scale(1.1)' }, { opacity: 1, transform: 'none' }],
+];
+const OUT = [
+  () => [{ opacity: 1 }, { opacity: 0 }],
+  () => [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-6vw)' }],
+  () => [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(6vw)' }],
+  () => [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-6vh)' }],
+  () => [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(1.08)' }],
+  () => [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.92)' }],
+];
+function leave(f, frames = pick(OUT)(), ms = 1300) {
+  if (!f) return;
+  const a = f.el.animate(frames, { duration: reduce ? 400 : ms, easing: 'ease-in-out', fill: 'forwards' });
+  a.onfinish = () => f.el.remove();
+}
+
+// Loop: one photo every loopSec; new photos interrupt, then the loop carries on where it was.
+// ---------- screen mode (photos / black / background) and pinned photo ----------
+let screenMode = 'photos', screenV = 0, pinFromEvent = null, pinned = null; // pinned = { p, until } (until 0 = locked)
+function setScreen(mode, v) {
+  const el = $('#blackout');
+  if (mode === screenMode && (!v || v === screenV)) return;
+  screenMode = mode; screenV = v || Date.now();
+  if (mode === 'photos') { el.classList.remove('on'); return; }
+  if (mode === 'black') { el.style.backgroundImage = ''; el.classList.add('on'); return; }
+  const url = `${base}/events/${eventId}/bg/${mode}?v=${screenV}`;
+  const pre = new Image();
+  pre.onload = pre.onerror = () => { el.style.backgroundImage = `url("${url}")`; el.classList.add('on'); };
+  pre.src = url;
+}
+function setPin(pin, photo) {
+  if (!pin) { if (pinned) { pinned = null; if (!showingNew) next(); } return; }
+  const p = loop.find((x) => x.id === pin.id) || photo;
+  if (!p) return;
+  pinned = { p, until: pin.until || 0 };
+  if (!showingNew) next(); // a new photo flying in finishes first, then the pin takes over
+}
+async function showPinned() {
+  const { p, until } = pinned;
+  const recheck = until ? Math.max(200, until - Date.now()) : 5000;
+  if (cur?.p.id !== p.id) {
+    const src = img(p);
+    const my = gen;
+    await loadImg(src);
+    if (my !== gen || !pinned || pinned.p.id !== p.id) return;
+    const old = cur;
+    const f = makeFrame(p, src);
+    cur = f;
+    kenBurns(f, until ? until - Date.now() + 1500 : 40000, { faces: true });
+    f.el.animate(pick(IN)(), { duration: reduce ? 400 : 1300, easing: 'ease-in-out' });
+    leave(old);
+  }
+  loopTimer = setTimeout(next, recheck);
+}
+
+let gen = 0; // only the newest call of next() may change the screen
+async function next() {
+  clearTimeout(loopTimer);
+  const my = ++gen;
+  if (pinned && pinned.until && pinned.until <= Date.now()) pinned = null;
+  if (pinned) return showPinned();
+  if (queue.length) return showNew();
+  if (!loopList.length) { leave(cur); cur = null; loopTimer = setTimeout(next, 2000); return; }
+  if (!pols.some((el) => el.classList.contains('has'))) fillScatter();
+  idx = (idx + 1) % loopList.length;
+  const p = loopList[idx];
+  const src = img(p);
+  await loadImg(src);
+  if (my !== gen || showingNew) return;
+  if (queue.length) return showNew();
+  const old = cur;
+  const f = makeFrame(p, src);
+  cur = f;
+  const hold = settings.loopSec * 1000;
+  kenBurns(f, hold + 2600);
+  f.el.animate(pick(IN)(), { duration: reduce ? 400 : 1300, easing: 'ease-in-out' });
+  leave(old);
+  loopTimer = setTimeout(next, hold);
+}
+
+async function showNew() {
+  clearTimeout(loopTimer);
+  ++gen;
+  const p = queue.shift();
+  showingNew = true;
+  $('#empty').classList.add('hidden');
+  const src = img(p);
+  const [im] = await Promise.all([loadImg(src), waitFaces(p, 1200)]);
+  if (!p.w && im.naturalWidth) { p.w = im.naturalWidth; p.h = im.naturalHeight; }
+  // 1) the photo on screen zooms out and away
+  if (cur) {
+    cur.kbAnim?.pause();
+    leave(cur, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.55)' }], 700);
+    cur = null;
+    await sleep(reduce ? 0 : 450);
+  }
+  // 2) the new photo flies in small from outside the screen to the centre, fitted
+  const f = makeFrame(p, src);
+  cur = f;
+  const tag = document.createElement('div');
+  tag.className = 'tag';
+  tag.innerHTML = '<b>NEW</b><span></span>';
+  tag.querySelector('span').textContent = p.by ? `by ${p.by}` : (p.src === 'public' ? 'from a guest' : 'from the photographer');
+  f.el.appendChild(tag);
+  setBgHint(p);
+  const side = pick([[-70, R(-30, 30)], [70, R(-30, 30)], [R(-40, 40), 70], [R(-40, 40), -70]]);
+  const fly = reduce ? 400 : 1100;
+  f.el.animate([
+    { transform: `translate(${side[0]}vw,${side[1]}vh) scale(.18) rotate(${R(-14, 14)}deg)`, opacity: .4 },
+    { transform: 'translate(0,0) scale(1.03) rotate(0deg)', opacity: 1, offset: .8 },
+    { transform: 'none', opacity: 1 },
+  ], { duration: fly, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  await sleep(fly);
+  // 3) slow movement towards faces while it is shown
+  const hold = Math.max(1000, settings.newSec * 1000);
+  kenBurns(f, hold, { faces: true });
+  await sleep(hold - 500);
+  // 4) 500 ms before it goes: fill the screen, faces in view
+  if (!reduce) {
+    f.kbAnim?.pause();
+    const m = $('#main');
+    const fill = Math.max(m.clientWidth / f.box.w, m.clientHeight / f.box.h);
+    const from = getComputedStyle(f.kb).transform;
+    tag.style.opacity = 0;
+    f.kb.style.borderRadius = '0';
+    f.el.animate([{ transform: 'none' }, { transform: `scale(${fill})` }], { duration: 500, easing: 'ease-in-out', fill: 'forwards' });
+    f.kbAnim = f.kb.animate([{ transform: from }, { transform: look(f.box, 1.12, focusOf(p)) }], { duration: 500, easing: 'ease-in-out', fill: 'forwards' });
+  }
+  await sleep(500);
+  showingNew = false;
+  rebuildLoop();
+  // carry on with the slideshow (next() cross-fades this one out)
+  next();
+}
+
+// faces arrive a moment after the photo; wait a little so the zoom can aim at them
+const faceWaiters = new Map();
+function waitFaces(p, ms) {
+  if (p.fc || Date.now() - (p.t || 0) > 30000) return Promise.resolve(); // older photos were checked already
+  return new Promise((r) => { const t = setTimeout(() => { faceWaiters.delete(p.id); r(); }, ms); faceWaiters.set(p.id, () => { clearTimeout(t); r(); }); });
+}
+function setBgHint(p) { const el = pick(pols); if (el) el.querySelector('img').src = img(p, 480); }
+
+function addPhoto(p) {
+  if (seen.has(p.id)) {
+    const i = loop.findIndex((x) => x.id === p.id);
+    if (i >= 0) { Object.assign(loop[i], p); rebuildLoop(); }
+    const q = queue.find((x) => x.id === p.id); if (q) Object.assign(q, p);
+    if (p.fc && faceWaiters.has(p.id)) { const w = faceWaiters.get(p.id); faceWaiters.delete(p.id); w(); }
+    if (i >= 0 || !fits(p)) return;
+  }
+  if (!fits(p)) return; // pending/flagged: wait for the "approved" update
+  seen.add(p.id);
+  loop.push(p);
+  queue.push(p);
+  lastNewAt = Date.now();
+  bubbleUntil = 0;
+  $('#bubble').classList.add('hidden');
+  if (!showingNew) next();
+}
+function removePhoto(id) {
+  if (pinned && pinned.p.id === id) { pinned = null; setTimeout(next, 0); }
+  loop = loop.filter((p) => p.id !== id);
+  queue = queue.filter((p) => p.id !== id);
+  const cur = loopList[idx];
+  rebuildLoop();
+  if (cur) idx = Math.max(-1, loopList.findIndex((p) => p.id === cur.id) - (cur.id === id ? 1 : 0));
+}
+
+// QR popup: shown until `until` (ms), or hidden at once when until is 0.
+let qrShownUntil = 0, qrHideTimer;
+async function showQr(until, code) {
+  clearTimeout(qrHideTimer);
+  qrShownUntil = until || 0;
+  const left = qrShownUntil - Date.now();
+  if (left <= 0) { $('#qrpop').classList.remove('on'); return; }
+  const url = `${location.origin}/c/${code}`;
+  try {
+    const { default: qrcode } = await import('/vendor/qrcode/qrcode.mjs');
+    const q = qrcode(0, 'M'); q.addData(url); q.make();
+    $('#qrImg').src = q.createDataURL(12, 2);
+  } catch { /* text still shows */ }
+  $('#qrHost').textContent = location.host;
+  $('#qrCode').textContent = fmtCode(code);
+  $('#qrpop').classList.add('on');
+  qrHideTimer = setTimeout(() => $('#qrpop').classList.remove('on'), left);
+}
+
+// "Upload your photos!": after bubbleEvery s without a new photo, show for bubbleFor s, then wait again.
+let bubbleUntil = 0;
+function bubbleTick() {
+  const el = $('#bubble'), now = Date.now();
+  el.textContent = settings.bubbleText || 'Upload your photos!';
+  if (settings.bubbleOn === false || screenMode !== 'photos') { el.classList.add('hidden'); bubbleUntil = 0; return; }
+  if (bubbleUntil) {
+    if (now < bubbleUntil) return;
+    el.classList.add('hidden'); bubbleUntil = 0; lastNewAt = now; // wait a full interval again
+    return;
+  }
+  if (!showingNew && now - lastNewAt >= (settings.bubbleEvery || 120) * 1000) showBubble();
+}
+function showBubble() {
+  bubbleUntil = Date.now() + (settings.bubbleFor || 15) * 1000;
+  $('#bubble').textContent = settings.bubbleText || 'Upload your photos!';
+  $('#bubble').classList.remove('hidden');
+}
+
+function connect() {
+  const es = new EventSource(`${base}/events/${eventId}/stream`);
+  es.addEventListener('photo', (e) => addPhoto(JSON.parse(e.data)));
+  es.addEventListener('remove', (e) => removePhoto(JSON.parse(e.data).id));
+  es.addEventListener('settings', (e) => { const d = JSON.parse(e.data); settings = { ...settings, ...d.settings }; if (d.code && d.code !== curCode) { curCode = d.code; setCode(d.code); } rebuildLoop(); });
+  es.addEventListener('screen', (e) => { const d = JSON.parse(e.data); setScreen(d.mode, d.v); });
+  es.addEventListener('bubble', () => { settings.bubbleOn = true; showBubble(); });
+  es.addEventListener('pin', (e) => { const d = JSON.parse(e.data); setPin(d.pin, d.photo); });
+  es.addEventListener('qr', (e) => { const d = JSON.parse(e.data); showQr(d.until, d.code || curCode); });
+  es.onerror = () => { if (es.readyState === EventSource.CLOSED) setTimeout(connect, 5000); };
+  // refresh event info (code may change on a new live window) every minute
+  setInterval(async () => { try { applyEvent((await get(`${base}/events/${eventId}`)).event); rebuildLoop(); } catch { /* keep going */ } }, 60000);
+}
+
+// Full screen + keep the screen awake + hide the cursor/controls when idle.
+// Full screen goes to the second screen (LED / TV) when there is one (Chrome / Edge: asks once for "window management").
+let screens = null; // already allowed: read once at start so the click goes straight to full screen
+navigator.permissions?.query({ name: 'window-management' }).then((p) => { if (p.state === 'granted') window.getScreenDetails().then((d) => { screens = d; }); }).catch(() => {});
+async function goFullscreen() {
+  if (document.fullscreenElement) return document.exitFullscreen().catch(() => {});
+  let screen;
+  try {
+    if ('getScreenDetails' in window) {
+      const d = screens || await window.getScreenDetails();
+      screen = d.screens.find((x) => !x.isPrimary && x !== d.currentScreen) || d.screens.find((x) => x !== d.currentScreen);
+    }
+  } catch { /* permission refused: this screen */ }
+  try { await document.documentElement.requestFullscreen(screen ? { screen } : undefined); }
+  catch { document.documentElement.requestFullscreen().catch(() => {}); }
+}
+$('#fsBtn').onclick = goFullscreen;
+document.addEventListener('keydown', (e) => { if (e.key === 'f' || e.key === 'F') $('#fsBtn').click(); });
+document.addEventListener('fullscreenchange', () => { $('#fsBtn').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+let wake = null;
+async function keepAwake() { try { wake = await navigator.wakeLock?.request('screen'); } catch { /* not allowed */ } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) keepAwake(); });
+keepAwake();
+let mouseTimer;
+document.addEventListener('mousemove', () => { document.body.classList.remove('idle-mouse'); clearTimeout(mouseTimer); mouseTimer = setTimeout(() => document.body.classList.add('idle-mouse'), 3000); });
+const orient = () => document.body.classList.toggle('portrait', innerHeight > innerWidth);
+addEventListener('resize', orient); orient();
+
+boot().catch((e) => fail(`Could not start the big screen: ${e.message}`));
+</script>
+</body>
+</html>

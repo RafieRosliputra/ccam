@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#20272b">
+<title>Photographer · JohorStudio.com Live</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/site.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  .box { width: 100%; max-width: 440px; margin: 32px auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .box h1 { margin: 0; font-size: 24px; font-stretch: 85%; }
+  .slot { display: flex; align-items: baseline; gap: 10px; }
+  .slot b { font-size: 28px; font-stretch: 80%; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
+  .kv dt { color: var(--steel); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .app-btn { background: var(--graphite); }
+  .log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; font-size: 14px; }
+  .log li { display: flex; gap: 10px; justify-content: space-between; border-bottom: 1px solid var(--mist); padding: 4px 0; }
+  .log .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log .st { flex: none; color: var(--steel); }
+  .log .st.ok { color: var(--ok); } .log .st.dup { color: var(--teal); } .log .st.bad { color: #a3302a; }
+  .apk { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--mist); padding-top: 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="wrap"><a class="brand" href="https://johorstudio.com" aria-label="JohorStudio.com"><span class="brand-name">JohorStudio.com</span></a><a class="live-home" href="https://live.johorstudio.com">Live home</a></div></header>
+<div class="wrap" style="flex:1">
+  <div class="card box" id="signin">
+    <div><h1>Photographer</h1><p class="muted small" style="margin:6px 0 0">Enter the photographer code from the admin, and your name.</p></div>
+    <div id="boxes"></div>
+    <div class="field"><label for="nm">Your name</label><input class="input" id="nm" maxlength="30" autocomplete="name" placeholder="e.g. Aiman"></div>
+    <p class="error" id="err" role="alert"></p>
+    <button class="btn" id="go">Sign in</button>
+    <details class="help"><summary>Where do I get this code?</summary><p>The photographer code is different from the guest code. Ask the JohorStudio.com admin or the event organiser.</p></details>
+  </div>
+
+  <div class="card box hidden" id="ready">
+    <div class="small muted" id="evDate"></div>
+    <h1 id="evTitle"></h1>
+    <div class="slot"><b id="slot"></b><span class="muted" id="who"></span></div>
+    <dl class="kv">
+      <dt>Folder</dt><dd id="folder"></dd>
+      <dt>Live until</dt><dd id="until"></dd>
+      <dt>Gallery</dt><dd><a id="gallery" target="_blank" rel="noopener"></a></dd>
+    </dl>
+    <a class="btn app-btn hidden" id="appBtn">Return to app</a>
+    <div class="apk hidden" id="apkBox">
+      <a class="btn ghost" id="apkBtn" href="/api/shoot/app.apk" download>Download JS Tether app (Android)</a>
+      <p class="small muted" style="margin:0">For Android phones tethered to the camera. Install it, then sign in with the same photographer code and name.</p>
+    </div>
+    <button class="btn" id="up">Upload photos from this phone</button>
+    <div class="hidden" id="prog" style="display:flex;flex-direction:column;gap:6px">
+      <div class="progress"><div id="bar"></div></div><div class="small muted" id="step"></div>
+      <ul class="log" id="log"></ul>
+      <button class="btn ghost small hidden" id="retry" style="align-self:flex-start">Retry failed</button>
+    </div>
+    <p class="small muted" style="margin:0">Copy photos from the camera to this phone, then pick them here. Each photo is made into WebP and goes straight to the gallery (no review). Photos already in the gallery are skipped. If the signal drops, uploads wait and carry on. Keep this page open until uploads finish.</p>
+    <button class="btn ghost small" id="out" style="align-self:flex-start">Sign out</button>
+  </div>
+</div>
+<input type="file" id="picker" accept="image/*" multiple hidden>
+
+<script type="module">
+import { $, api, toast, fmtDate } from '/js/common.js';
+import { codeBoxes, sendCode } from '/js/codebox.js';
+
+const params = new URLSearchParams(location.search);
+const fromApp = params.get('app') === '1';
+let appToken = null;
+try { appToken = sessionStorage.getItem('lp-app-token'); } catch {}
+
+const boxes = codeBoxes($('#boxes'), { onComplete: () => { if ($('#nm').value.trim()) go(); else $('#nm').focus(); } });
+try { $('#nm').value = localStorage.getItem('lp-photog-name') || ''; } catch {}
+$('#go').onclick = go;
+$('#nm').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+
+async function go() {
+  $('#err').textContent = '';
+  const name = $('#nm').value.trim();
+  if (boxes.get().length !== 6) { $('#err').textContent = 'Enter the 6-digit code.'; return; }
+  if (!name) { $('#err').textContent = 'Type your name.'; $('#nm').focus(); return; }
+  try {
+    const r = await sendCode(boxes.get(), { want: 'photographer', name, app: fromApp });
+    try { localStorage.setItem('lp-photog-name', name); if (r.token) sessionStorage.setItem('lp-app-token', r.token); } catch {}
+    appToken = r.token || appToken;
+    show();
+  } catch (e) { if (e.status === 401) boxes.clear(); $('#err').textContent = e.message; boxes.shake(); }
+}
+
+async function show() {
+  let me;
+  try { me = await api('GET', '/api/shoot'); } catch { $('#signin').classList.remove('hidden'); $('#ready').classList.add('hidden'); boxes.focus(); return; }
+  $('#signin').classList.add('hidden'); $('#ready').classList.remove('hidden');
+  $('#evTitle').textContent = me.event.title;
+  $('#evDate').textContent = fmtDate(me.event.date);
+  $('#slot').textContent = `Photographer ${me.slot}`;
+  $('#who').textContent = me.name;
+  $('#folder').textContent = `EVENTS / … / ${me.folder}`;
+  $('#until').textContent = new Date(me.event.endsAt).toLocaleString('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  $('#gallery').href = me.event.url; $('#gallery').textContent = me.event.url.replace(/^https?:\/\//, '');
+  // Back to JS Tether with the session token (only when the app opened this page).
+  api('GET', '/api/shoot/app').then(({ apk }) => {
+    if (!apk || fromApp) return;
+    $('#apkBtn').textContent = `Download JS Tether ${apk.version} (Android, ${Math.max(1, Math.round(apk.size / 1024))} KB)`;
+    $('#apkBox').classList.remove('hidden');
+  }).catch(() => {});
+  if (fromApp && appToken) { $('#appBtn').classList.remove('hidden'); $('#appBtn').href = `jstether://auth?token=${encodeURIComponent(appToken)}`; }
+}
+$('#out').onclick = async () => { await api('POST', '/auth/logout', { role: 'photographer' }); try { sessionStorage.removeItem('lp-app-token'); } catch {} location.reload(); };
+
+// Web upload: full-resolution WebP 80% (photographer quality), straight to Photographer N.
+// Each file gets a key (name|size|time) so the server skips photos already sent.
+let busy = false, items = [];
+// name|size|EXIF time taken (or m<last modified>): the same key JS Tether makes for the same file.
+async function exifTaken(file) {
+  try {
+    const v = new DataView(await file.slice(0, 262144).arrayBuffer());
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    let o = 2;
+    while (o + 4 < v.byteLength) {
+      const m = v.getUint16(o), len = v.getUint16(o + 2);
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) { // "Exif"
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = (x) => v.getUint16(t + x, le), u32 = (x) => v.getUint32(t + x, le);
+        const find = (ifd, tag) => { const n = u16(ifd); for (let i = 0; i < n; i++) { const e = ifd + 2 + i * 12; if (u16(e) === tag) return e; } return -1; };
+        const ptr = find(u32(4), 0x8769); if (ptr < 0) return null;
+        const e = find(u32(ptr + 8), 0x9003); if (e < 0) return null;
+        const at = t + u32(e + 8);
+        let str = ''; for (let i = 0; i < 19; i++) str += String.fromCharCode(v.getUint8(at + i));
+        return /^\d{4}:\d\d:\d\d \d\d:\d\d:\d\d$/.test(str) && !str.startsWith('0000') ? str : null;
+      }
+      if ((m & 0xFF00) !== 0xFF00 || m === 0xFFDA) break;
+      o += 2 + len;
+    }
+  } catch { /* not a JPEG with EXIF */ }
+  return null;
+}
+const keyOf = async (f) => `${f.name}|${f.size}|${(await exifTaken(f)) || 'm' + (f.lastModified || 0)}`;
+const STATE = { wait: ['Waiting', ''], conv: ['Converting…', ''], up: ['Uploading', ''], ok: ['Uploaded', 'ok'], dup: ['Already in gallery', 'dup'], bad: ['Failed', 'bad'], net: ['No signal, waiting…', ''] };
+function mark(it, st, extra = '') {
+  it.st = st;
+  const [txt, cls] = STATE[st];
+  it.el.querySelector('.st').textContent = txt + extra;
+  it.el.querySelector('.st').className = `st ${cls}`;
+}
+window.addEventListener('beforeunload', (e) => { if (busy) { e.preventDefault(); e.returnValue = ''; } });
+$('#up').onclick = () => { if (!busy) $('#picker').click(); };
+$('#retry').onclick = () => run(items.filter((it) => it.st === 'bad'));
+$('#picker').onchange = async (e) => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  const all = await Promise.all(files.map(async (f) => ({ file: f, key: await keyOf(f) })));
+  const fresh = all.filter((x) => !items.some((it) => it.key === x.key));
+  for (const x of fresh) {
+    x.el = document.createElement('li');
+    x.el.innerHTML = '<span class="nm"></span><span class="st"></span>';
+    x.el.querySelector('.nm').textContent = x.file.name;
+    $('#log').appendChild(x.el);
+    items.push(x); mark(x, 'wait');
+  }
+  $('#prog').classList.remove('hidden');
+  // ask the server which ones are already in the gallery
+  try {
+    const { sent } = await api('POST', '/api/shoot/check', { keys: fresh.map((x) => x.key) });
+    fresh.forEach((x) => { if (sent.includes(x.key)) mark(x, 'dup'); });
+  } catch { /* offline: the upload start checks again */ }
+  run(fresh.filter((x) => x.st === 'wait'));
+};
+
+async function run(list) {
+  if (busy || !list.length) return;
+  busy = true; $('#up').disabled = true; $('#retry').classList.add('hidden');
+  const { preparePhoto } = await import('/js/encode.js');
+  const { uploadPhoto } = await import('/js/upload.js');
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    const set = (f, t) => { $('#bar').style.width = `${((i + f) / list.length) * 100}%`; if (t) $('#step').textContent = t; };
+    try {
+      mark(it, 'conv'); set(0, `${i + 1}/${list.length} · converting ${it.file.name}`);
+      const out = await preparePhoto(it.file, 0.8);
+      mark(it, 'up'); set(0.3, `${i + 1}/${list.length} · uploading`);
+      const photo = await uploadPhoto({ startUrl: '/api/shoot/uploads', startBody: { name: it.file.name.replace(/\.[^.]+$/, '') + '.webp', key: it.key },
+        blob: out.blob, thumbs: out.thumbs, tries: Infinity,
+        onWait: (m) => { mark(it, 'net'); set(0.3, m); },
+        onProgress: (x) => { mark(it, 'up', ` ${Math.round(x * 100)}%`); set(0.3 + 0.7 * x); } });
+      mark(it, photo?.duplicate ? 'dup' : 'ok');
+    } catch (err) {
+      mark(it, 'bad', `: ${err.message}`);
+      if (err.status === 401) { toast('Signed out: sign in again', 5000); break; }
+    }
+  }
+  busy = false; $('#up').disabled = false;
+  const n = (s) => items.filter((it) => it.st === s).length;
+  $('#bar').style.width = '100%';
+  $('#step').textContent = `${n('ok')} uploaded · ${n('dup')} already in gallery${n('bad') ? ` · ${n('bad')} failed` : ''}`;
+  $('#retry').classList.toggle('hidden', !n('bad'));
+}
+
+show();
+</script>
+</body>
+</html>

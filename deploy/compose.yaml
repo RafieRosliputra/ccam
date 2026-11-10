@@ -1,0 +1,68 @@
+# TrueNAS custom app "ccam" on m10 (https://ccam.my + *.ccam.my)
+# Code:   /mnt/ssd/ccam/app      (git clone of github.com/RafieRosliputra/ccam, read-only in the container)
+# Data:   /mnt/ssd/ccam/data     (SQLite DB, brand logos, thumbnails)
+# Photos: /mnt/ssd/ccam/photos   (events are created under EVENTS/<folder>/...)
+# Secrets (mail API key, Access AUD): /mnt/ssd/ccam/ccam.env, never in git.
+services:
+  ccam:
+    image: node:24-alpine
+    container_name: ccam
+    user: "568:568"
+    working_dir: /app/server
+    command: node src/server.js
+    env_file:
+      - /mnt/ssd/ccam/ccam.env
+    environment:
+      TZ: Asia/Kuala_Lumpur
+      NODE_ENV: production
+      PORT: "8101"
+      DATA_DIR: /data
+      PHOTOS_DIR: /photos
+      REQUIRE_STORAGE_MARKER: "0"
+      PUBLIC_URL: https://ccam.my
+      # platform host + client zone
+      ADMIN_HOST: ccam.my
+      PLATFORM_HOSTS: ccam.my,www.ccam.my
+      TENANT_ZONE: ccam.my
+      APEX_MODE: app
+      BRANDS_DIR: /data/brands
+      TENANT_DISCLAIMER: platform provided by JohorStudio.com
+      # Admin login = Cloudflare Access app "CCAM Admin" (ccam.my/admin + /api/admin)
+      ACCESS_TEAM_DOMAIN: johorstudio.cloudflareaccess.com
+      ACCESS_AUD: CHANGE_ME_AFTER_ACCESS_APP
+      ADMIN_EMAILS: rafierosliputra@gmail.com,johorstudio@gmail.com
+      MODERATOR_URL: http://moderator:8096
+    ports:
+      - "8101:8101"
+    volumes:
+      - /mnt/ssd/ccam/app:/app:ro
+      - /mnt/ssd/ccam/data:/data
+      - /mnt/ssd/ccam/photos:/photos
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8101/auth/config"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - moderator
+    restart: unless-stopped
+
+  # AI check for guest photos (NSFW, politics, documents/text, violence...). CPU only.
+  moderator:
+    image: python:3.11-slim
+    container_name: ccam-moderator
+    user: "568:568"
+    working_dir: /app/moderator
+    command: sh -c "pip install --no-cache-dir -q --user -r requirements.txt && (pip uninstall -y -q opencv-python || true) && pip install --no-cache-dir -q --user --no-deps --force-reinstall opencv-python-headless==4.10.0.84 && exec python -u app.py"
+    environment:
+      TZ: Asia/Kuala_Lumpur
+      HOME: /models
+      HF_HOME: /models/hf
+      PHOTOS_DIR: /photos
+      PORT: "8096"
+      THREADS: "4"
+    volumes:
+      - /mnt/ssd/ccam/app:/app:ro
+      - /mnt/ssd/ccam/models:/models
+      - /mnt/ssd/ccam/photos:/photos:ro
+    restart: unless-stopped

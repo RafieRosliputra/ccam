@@ -1,0 +1,14 @@
+{
+  "name": "ccam-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CCAM: live event photo platform (ccam.my) with white-label event organisers",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  }
+}
