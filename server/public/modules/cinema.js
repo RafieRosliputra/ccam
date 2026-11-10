@@ -1,25 +1,25 @@
 // CCAM big-screen module: cinema
-// Horizontal lanes, ONE photo per lane, sliding left → right. Each photo keeps its own aspect ratio
-// (landscape stays wide, portrait stays tall and centred in its lane). No duplicated tracks and no tile
-// insertion, so there is no seam/flicker at the loop. A new photo drops in from a random edge, grows big,
-// then takes over a lane and keeps travelling right. Pin pauses the lanes and pops the photo up.
+// Continuous conveyor lanes: every lane keeps moving left → right forever. Photos never "enter and
+// disappear" — a tile that leaves the right edge is recycled to the left with the next photo, so the
+// motion is uninterrupted. Each photo keeps its own aspect ratio (landscape wide, portrait tall).
+// A NEW photo simply drops in (from a random edge, no big grow) onto a visible tile and joins the flow.
+// Pin pauses the lanes and pops the photo up.
 // Contract: export default create(ctx) -> { mount, refresh, add, remove, pin, destroy }.
 export default function create(ctx) {
   const { photos, img, pick, R, reduce, settings } = ctx;
   const W = () => innerWidth, H = () => innerHeight;
-  let root, lanes = [], tagEl = null, pinHandle = null, popTimer = null, pinnedId = null;
+  let root, lanes = [], raf = 0, lastT = 0, tagEl = null, pinHandle = null, pinnedId = null, nextIdx = 0;
 
   function injectCss() {
     if (document.getElementById('mod-cinema-css')) return;
     const st = document.createElement('style'); st.id = 'mod-cinema-css';
     st.textContent = `
-      .cine-lanes { position:absolute; inset:0; display:flex; flex-direction:column; gap:.6vw; padding:.6vw 0; overflow:hidden; }
-      .cine-lane { position:relative; flex:1 1 0; min-height:0; overflow:hidden; }
-      .cine-shot { position:absolute; top:0; bottom:0; margin:auto 0; left:50%; height:100%; width:auto; max-width:none;
-        object-fit:contain; display:block; border-radius:.5vw; will-change:transform; background:#0b0f12;
-        transform:translateX(-50%); }
+      .cine-lanes { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5vw; padding:.3vw 0; overflow:hidden; }
+      .cine-lane { position:relative; flex:0 0 auto; min-height:0; overflow:hidden; }
+      .cine-shot { position:absolute; top:50%; left:0; height:100%; width:auto; max-width:none; object-fit:contain;
+        display:block; border-radius:.5vw; will-change:transform; background:#0b0f12; transform:translateY(-50%); }
       .cine-empty { position:absolute; inset:0; display:grid; place-items:center; color:#9fb0b2; font-size:max(16px,1.6vw); z-index:2; }
-      .cine-fly { position:absolute; z-index:8; overflow:hidden; border-radius:.6vw; pointer-events:none;
+      .cine-fly { position:absolute; z-index:8; overflow:hidden; border-radius:.5vw; pointer-events:none;
         box-shadow:0 2vw 8vw rgba(0,0,0,.6); background:#1a2125; will-change:left,top,width,height; }
       .cine-fly img { width:100%; height:100%; object-fit:cover; display:block; }
       .cine-pop { position:absolute; z-index:5; display:none; overflow:hidden; background:transparent;
@@ -31,80 +31,90 @@ export default function create(ctx) {
   }
   const list = () => photos();
   function emptyState() { const el = root && root.querySelector('.cine-empty'); if (el) el.style.display = list().length ? 'none' : ''; }
+  const shotWidth = (lane, p) => Math.max(60, (lane.el.clientHeight || 200) * ((p && p.w) || 3) / ((p && p.h) || 2));
 
-  // Each lane holds ONE photo at a time. Every cycle the next photo slides in from the left while the
-  // current one slides out to the right — the lane is never empty, so nothing flickers.
-  function laneShots(lane) { return [...lane.el.querySelectorAll('.cine-shot')]; }
-  function sizeShot(imgEl, p) {
-    imgEl.src = img(p, 1600);
-    const r = laneSize(imgEl);
-    return r;
+  function laneLoop(lane) {
+    // total width of the loop (tiles + gaps)
+    let total = 0;
+    for (const t of lane.tiles) total += shotWidth(lane, t.p) + lane.gap;
+    lane.loopWidth = Math.max(1, total);
   }
-  function laneSize(imgEl) {
-    const w = imgEl.naturalWidth || 3, h = imgEl.naturalHeight || 2;
-    const H0 = imgEl.parentElement.clientHeight || 200;
-    return { w: Math.round(h ? (H0 * w / h) : H0 * 1.4), h: H0 };
+  function assignTile(lane, tile, p) {
+    tile.p = p;
+    tile.img.src = img(p, 1600);
+    tile.img.style.height = (lane.el.clientHeight || 200) + 'px'; // explicit, so the photo is exactly the lane height
+    tile.img.style.width = shotWidth(lane, p) + 'px';
   }
-  function slideCycle(lane) {
-    if (!root || !lane || pinnedId) return;
-    clearTimeout(lane.timer);
-    const ps = list();
-    if (!ps.length) { laneShots(lane).forEach((i) => i.removeAttribute('src')); lane.p = null; emptyState(); lane.timer = setTimeout(() => slideCycle(lane), 1200); return; }
-    const p = (lane.queue && lane.queue.shift()) || pick(ps.filter((x) => x.id !== lane.p?.id)) || ps[0];
-    const [cur, next] = laneShots(lane);
-    const incoming = (lane.turn = !lane.turn) ? cur : next;
-    const outgoing = incoming === cur ? next : cur;
-    incoming.style.opacity = '0';
-    incoming.src = img(p, 1600);
-    const show = () => {
-      const iw = incoming.naturalWidth || 3, ih = incoming.naturalHeight || 2;
-      const H0 = lane.el.clientHeight || 200;
-      const w = Math.round(H0 * iw / ih);
-      const off = -w / 2 + 4;
-      const hold = Math.max(3500, (settings().loopSec || 5) * 1000);
-      incoming.style.opacity = '1';
-      const inAnim = incoming.animate(
-        [{ transform: `translateX(${off - W()}px)` }, { transform: `translateX(${off}px)` }],
-        { duration: reduce ? 200 : 900, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
-      );
-      let outAnim = null;
-      if (outgoing && outgoing.src && outgoing.style.opacity !== '0') {
-        const ow = Math.round(H0 * (outgoing.naturalWidth || 3) / (outgoing.naturalHeight || 2));
-        outAnim = outgoing.animate(
-          [{ transform: `translateX(${-ow / 2}px)` }, { transform: `translateX(${-ow / 2 + W()}px)` }],
-          { duration: reduce ? 200 : 900, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' },
-        );
-      }
-      lane.p = p;
-      lane.timer = setTimeout(() => {
-        if (outgoing) outgoing.style.opacity = '0';
-        slideCycle(lane);
-      }, hold);
-    };
-    if (incoming.complete && incoming.naturalWidth) show();
-    else { incoming.onload = () => { incoming.onload = null; show(); }; lane.timer = setTimeout(show, 1500); }
-  }
-  function startLane(lane) {
-    lane.turn = false;
-    slideCycle(lane);
-  }
-  function build() {
-    injectCss();
+  function buildLane() {
     const box = document.createElement('div'); box.className = 'cine-lanes';
+    root.appendChild(box); // in the DOM first so each lane has a real height
     const n = innerHeight > innerWidth ? 2 : 3;
+    const ps = list();
     for (let i = 0; i < n; i++) {
       const el = document.createElement('div'); el.className = 'cine-lane';
-      const a = document.createElement('img'); a.className = 'cine-shot'; a.decoding = 'async'; a.style.opacity = '0';
-      const b = document.createElement('img'); b.className = 'cine-shot'; b.decoding = 'async'; b.style.opacity = '0';
-      el.appendChild(a); el.appendChild(b); box.appendChild(el);
-      lanes.push({ el, a, b, p: null, anim: null, timer: null, turn: false, queue: [] });
+      const lane = { el, tiles: [], speed: 38 + i * 9, gap: Math.round(innerWidth * 0.006), loopWidth: 1, paused: false };
+      const count = 5;
+      for (let k = 0; k < count; k++) {
+        const im = document.createElement('img'); im.className = 'cine-shot'; im.decoding = 'async';
+        const tile = { img: im, p: null, x: 0 };
+        el.appendChild(im); lane.tiles.push(tile);
+      }
+      // lay them out left → right, starting slightly before the screen so the lane is always full
+      let x = -Math.round(innerWidth * 0.2);
+      for (const t of lane.tiles) {
+        const p = ps.length ? ps[(nextIdx++) % ps.length] : null;
+        if (p) assignTile(lane, t, p); else t.img.style.width = '0px';
+        t.x = x;
+        x += shotWidth(lane, p || { w: 3, h: 2 }) + lane.gap;
+      }
+      laneLoop(lane);
+      box.appendChild(el);
+      lanes.push(lane);
     }
-    root.appendChild(box);
+    // give every lane an explicit height so the photos can fill it exactly
+    const boxH = box.clientHeight || innerHeight;
+    const gap = parseFloat(getComputedStyle(box).rowGap) || 0;
+    const laneH = Math.max(80, Math.floor((boxH - gap * (n - 1)) / n));
+    lanes.forEach((lane) => { lane.el.style.height = laneH + 'px'; });
+    // now that the lanes have a height, size/reposition their photos to exactly fill it
+    lanes.forEach((lane) => {
+      const h = lane.el.clientHeight;
+      lane.tiles.forEach((t) => { if (t.p) { t.img.style.height = h + 'px'; t.img.style.width = shotWidth(lane, t.p) + 'px'; } });
+      laneLoop(lane);
+    });
     const empty = document.createElement('div'); empty.className = 'cine-empty'; empty.textContent = 'Photos will appear here'; root.appendChild(empty);
     const pop = document.createElement('div'); pop.className = 'cine-pop'; pop.innerHTML = '<img alt="" decoding="async">'; root.appendChild(pop);
     emptyState();
-    lanes.forEach((lane, i) => setTimeout(() => startLane(lane), i * 250));
+    startRaf();
   }
+  function startRaf() {
+    cancelAnimationFrame(raf); lastT = 0;
+    const step = (t) => {
+      const dt = lastT ? Math.min(64, t - lastT) / 1000 : 0.016;
+      lastT = t;
+      for (const lane of lanes) {
+        if (lane.paused) { lane.tiles.forEach((tile) => place(lane, tile)); continue; }
+        for (const tile of lane.tiles) {
+          tile.x += lane.speed * dt;                    // travel left → right
+          const w = shotWidth(lane, tile.p || { w: 3, h: 2 });
+          if (tile.x - w / 2 > W()) {                   // left the right edge: recycle to the left, keep going
+            tile.x -= lane.loopWidth;
+            const ps = list();
+            if (ps.length) assignTile(lane, tile, ps[(nextIdx++) % ps.length]);
+            else tile.img.style.width = '0px';
+          }
+          place(lane, tile);
+        }
+        laneLoop(lane);
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  }
+  function place(lane, tile) {
+    tile.img.style.transform = `translate(${Math.round(tile.x)}px, -50%)`;
+  }
+
   function showTag(p) {
     hideTag();
     tagEl = document.createElement('div'); tagEl.className = 'tag'; tagEl.setAttribute('data-brand-lock', '1');
@@ -112,48 +122,39 @@ export default function create(ctx) {
     document.getElementById('stage').appendChild(tagEl);
     const foot = document.getElementById('foot');
     if (foot) tagEl.style.bottom = (innerHeight - foot.getBoundingClientRect().top + 5) + 'px';
-    setTimeout(hideTag, 4500);
+    setTimeout(hideTag, 4000);
   }
   function hideTag() { if (tagEl) { tagEl.remove(); tagEl = null; } }
 
-  // new photo: random edge → grows big in the middle → takes over a lane (keeps sliding right)
+  // new photo: drop from a random edge straight onto a visible tile (no big grow), then join the flow
   function dropIn(p) {
-    if (!root) return;
-    const live = lanes.filter((l) => l.el && l.el.isConnected);
-    if (!live.length) return;
-    const lane = pick(live);
+    if (!root || !lanes.length) return;
+    const lane = pick(lanes);
+    const visible = lane.tiles.filter((t) => t.x > W() * 0.12 && t.x < W() * 0.88); // centre on screen
+    const tile = visible.length ? pick(visible) : pick(lane.tiles);
+    if (!tile) return;
     showTag(p);
+    const w = shotWidth(lane, p), h = lane.el.clientHeight;
+    const r = lane.el.getBoundingClientRect();
+    const target = { left: W() / 2 + tile.x - w / 2, top: r.top };
     const edge = pick(['top', 'bottom', 'left', 'right']);
-    const w0 = 16 * W() / 100, h0 = w0 * 0.75;
-    let x0, y0;
-    if (edge === 'top') { x0 = R(0.1, 0.8) * W(); y0 = -h0; }
-    else if (edge === 'bottom') { x0 = R(0.1, 0.8) * W(); y0 = H(); }
-    else if (edge === 'left') { x0 = -w0; y0 = R(0.1, 0.8) * H(); }
-    else { x0 = W(); y0 = R(0.1, 0.8) * H(); }
+    const start = edge === 'top' ? { x: target.left + w * 0.2, y: -h * 0.6 }
+      : edge === 'bottom' ? { x: target.left + w * 0.2, y: H() + h * 0.1 }
+      : edge === 'left' ? { x: -w, y: target.top + h * 0.2 }
+      : { x: W() + w * 0.1, y: target.top + h * 0.2 };
     const fly = document.createElement('div'); fly.className = 'cine-fly';
     fly.innerHTML = `<img src="${img(p, 1600)}" alt="">`;
-    Object.assign(fly.style, { left: x0 + 'px', top: y0 + 'px', width: w0 + 'px', height: h0 + 'px', transition: 'none', opacity: '0', borderRadius: '0.6vw' });
+    Object.assign(fly.style, { left: start.x + 'px', top: start.y + 'px', width: w + 'px', height: h + 'px', transition: 'none' });
     root.appendChild(fly);
-    const bigW = Math.min(W() * 0.5, 900), bigH = bigW * 0.75;
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      Object.assign(fly.style, { opacity: '1', transition: 'left .45s cubic-bezier(.4,0,.2,1), top .45s cubic-bezier(.4,0,.2,1), width .45s cubic-bezier(.4,0,.2,1), height .45s cubic-bezier(.4,0,.2,1), opacity .25s ease-out' });
-      Object.assign(fly.style, { left: (W() - bigW) / 2 + 'px', top: (H() - bigH) / 2 + 'px', width: bigW + 'px', height: bigH + 'px' });
+      fly.style.transition = 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1)';
+      fly.style.left = target.left + 'px'; fly.style.top = target.top + 'px';
     }));
     setTimeout(() => {
-      // land on the lane, take it over, and continue sliding to the right
-      const r = lane.el.getBoundingClientRect();
-      const iw = p.w || 3, ih = p.h || 2;
-      const shotH = r.height, shotW = Math.min(shotH * iw / ih, W() * 0.9);
-      Object.assign(fly.style, { transition: 'left .75s cubic-bezier(.4,0,.2,1), top .75s cubic-bezier(.4,0,.2,1), width .75s cubic-bezier(.4,0,.2,1), height .75s cubic-bezier(.4,0,.2,1), border-radius .5s' });
-      Object.assign(fly.style, { left: (W() - shotW) / 2 + 'px', top: r.top + (shotH - r.height) / 2 + 'px', width: shotW + 'px', height: shotH + 'px', borderRadius: '.5vw' });
-      setTimeout(() => {
-        fly.remove();
-        // hand the lane over: put the new photo first in that lane's queue and restart its cycle
-        lane.queue = [p];
-        clearTimeout(lane.timer);
-        slideCycle(lane);
-      }, reduce ? 120 : 760);
-    }, reduce ? 120 : 520);
+      fly.remove();
+      assignTile(lane, tile, p); // the photo joins the moving row exactly where it landed
+      laneLoop(lane);
+    }, reduce ? 120 : 540);
   }
 
   function faceSafeScale(p, f, desired) {
@@ -215,34 +216,28 @@ export default function create(ctx) {
   }
 
   return {
-    mount(el) { root = el; build(); },
+    mount(el) { root = el; injectCss(); buildLane(); },
     refresh() {
-      lanes.forEach((lane) => {
-        if (!lane.p && list().length) { lane.queue = []; startLane(lane); }
-        else if (lane.p && !list().some((p) => p.id === lane.p.id)) { lane.queue = []; slideCycle(lane); }
-      });
-      emptyState();
+      const ps = list();
+      if (ps.length) lanes.forEach((lane) => lane.tiles.forEach((t) => { if (!t.p) assignTile(lane, t, ps[(nextIdx++) % ps.length]); }));
+      laneLoopAll(); emptyState();
     },
     add(p) { dropIn(p); },
-    remove(id) { lanes.forEach((lane) => { if (lane.p && lane.p.id === id) { lane.queue = []; slideCycle(lane); } }); emptyState(); },
+    remove(id) { lanes.forEach((lane) => lane.tiles.forEach((t) => { if (t.p && t.p.id === id) { t.p = null; t.img.removeAttribute('src'); t.img.style.width = '0px'; } })); laneLoopAll(); emptyState(); },
     pin(pin) {
       if (!pin) {
-        pinnedId = null; clearTimeout(popTimer);
-        lanes.forEach((lane) => { lane.queue = []; slideCycle(lane); });
+        pinnedId = null;
+        lanes.forEach((lane) => { lane.paused = false; });
         if (pinHandle) { closePopup(pinHandle, () => { pinHandle = null; }); pinHandle = null; }
         return;
       }
       pinnedId = pin.id || null;
-      lanes.forEach((lane) => clearTimeout(lane.timer));
+      lanes.forEach((lane) => { lane.paused = true; });
       const p = ctx.photoById(pin.id); if (!p) return;
-      const lane = lanes.find((l) => l.p && l.p.id === p.id) || pick(lanes);
+      const lane = lanes.find((l) => l.tiles.some((t) => t.p && t.p.id === p.id)) || pick(lanes);
       pinHandle = popup(p, lane);
     },
-    destroy() {
-      clearTimeout(popTimer); hideTag();
-      lanes.forEach((lane) => clearTimeout(lane.timer));
-      lanes = [];
-      if (root) root.innerHTML = '';
-    },
+    destroy() { cancelAnimationFrame(raf); hideTag(); lanes = []; if (root) root.innerHTML = ''; },
   };
+  function laneLoopAll() { lanes.forEach(laneLoop); }
 }
