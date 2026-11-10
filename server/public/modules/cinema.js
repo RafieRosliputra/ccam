@@ -17,7 +17,7 @@ export default function create(ctx) {
       .cine-lanes { position:absolute; inset:0; display:flex; flex-direction:column; gap:.5vw; padding:.3vw 0; overflow:hidden; }
       .cine-lane { position:relative; flex:0 0 auto; min-height:0; overflow:hidden; }
       .cine-shot { position:absolute; top:50%; left:0; height:100%; width:auto; max-width:none; object-fit:contain;
-        display:block; border-radius:.5vw; will-change:transform; background:#0b0f12; transform:translateY(-50%); }
+        display:block; will-change:transform; background:#0b0f12; transform:translateY(-50%); }
       .cine-empty { position:absolute; inset:0; display:grid; place-items:center; color:#9fb0b2; font-size:max(16px,1.6vw); z-index:2; }
       .cine-fly { position:absolute; z-index:8; overflow:hidden; border-radius:.5vw; pointer-events:none;
         box-shadow:0 2vw 8vw rgba(0,0,0,.6); background:#1a2125; will-change:left,top,width,height; }
@@ -39,6 +39,15 @@ export default function create(ctx) {
     for (const t of lane.tiles) total += shotWidth(lane, t.p) + lane.gap;
     lane.loopWidth = Math.max(1, total);
   }
+  function relayout(lane) {
+    let x = -Math.round(innerWidth * 0.2);
+    for (const t of lane.tiles) {
+      t.x = x;
+      x += (t.p ? shotWidth(lane, t.p) : 0) + lane.gap;
+      place(lane, t);
+    }
+    laneLoop(lane);
+  }
   function assignTile(lane, tile, p) {
     tile.p = p;
     tile.img.src = img(p, 1600);
@@ -52,7 +61,7 @@ export default function create(ctx) {
     const ps = list();
     for (let i = 0; i < n; i++) {
       const el = document.createElement('div'); el.className = 'cine-lane';
-      const lane = { el, tiles: [], speed: 38 + i * 9, gap: Math.round(innerWidth * 0.006), loopWidth: 1, paused: false };
+      const lane = { el, tiles: [], speed: 38 + i * 9, gap: 0, loopWidth: 1, paused: false }; // contiguous strip
       const count = 5;
       for (let k = 0; k < count; k++) {
         const im = document.createElement('img'); im.className = 'cine-shot'; im.decoding = 'async';
@@ -76,11 +85,11 @@ export default function create(ctx) {
     const gap = parseFloat(getComputedStyle(box).rowGap) || 0;
     const laneH = Math.max(80, Math.floor((boxH - gap * (n - 1)) / n));
     lanes.forEach((lane) => { lane.el.style.height = laneH + 'px'; });
-    // now that the lanes have a height, size/reposition their photos to exactly fill it
+    // now that the lanes have a height, size the photos and re-lay the strip so the photos touch (no gaps)
     lanes.forEach((lane) => {
       const h = lane.el.clientHeight;
       lane.tiles.forEach((t) => { if (t.p) { t.img.style.height = h + 'px'; t.img.style.width = shotWidth(lane, t.p) + 'px'; } });
-      laneLoop(lane);
+      relayout(lane);
     });
     const empty = document.createElement('div'); empty.className = 'cine-empty'; empty.textContent = 'Photos will appear here'; root.appendChild(empty);
     const pop = document.createElement('div'); pop.className = 'cine-pop'; pop.innerHTML = '<img alt="" decoding="async">'; root.appendChild(pop);
@@ -130,33 +139,34 @@ export default function create(ctx) {
   function dropIn(p) {
     if (!root || !lanes.length) return;
     const lane = pick(lanes);
-    const visible = lane.tiles.filter((t) => t.x > W() * 0.12 && t.x < W() * 0.88); // centre on screen
-    const tile = visible.length ? pick(visible) : pick(lane.tiles);
-    if (!tile) return;
+    // take the leftmost tile: it is the one waiting to enter the screen, i.e. the back of the queue
+    const queueTile = lane.tiles.reduce((best, t) => (best === null || t.x < best.x ? t : best), null);
+    if (!queueTile) return;
     showTag(p);
     const w = shotWidth(lane, p), h = lane.el.clientHeight;
-    const r = lane.el.getBoundingClientRect();
-    const target = { left: W() / 2 + tile.x - w / 2, top: r.top };
-    const edge = pick(['top', 'bottom', 'left', 'right']);
-    const start = edge === 'top' ? { x: target.left + w * 0.2, y: -h * 0.6 }
-      : edge === 'bottom' ? { x: target.left + w * 0.2, y: H() + h * 0.1 }
-      : edge === 'left' ? { x: -w, y: target.top + h * 0.2 }
-      : { x: W() + w * 0.1, y: target.top + h * 0.2 };
     const fly = document.createElement('div'); fly.className = 'cine-fly';
     fly.innerHTML = `<img src="${img(p, 1600)}" alt="">`;
-    Object.assign(fly.style, { left: start.x + 'px', top: start.y + 'px', width: w + 'px', height: h + 'px', transition: 'none' });
+    Object.assign(fly.style, { left: (W() - w * 0.5) / 2 + 'px', top: -h * 0.7 + 'px', width: w * 0.5 + 'px', height: h * 0.5 + 'px', transition: 'none' });
     root.appendChild(fly);
+    const bigW = Math.min(W() * 0.5, 900), bigH = bigW * 0.75;
+    // 1) drop from the top and grow big in the middle
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      fly.style.transition = 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1)';
-      fly.style.left = target.left + 'px'; fly.style.top = target.top + 'px';
+      fly.style.transition = 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1)';
+      Object.assign(fly.style, { left: (W() - bigW) / 2 + 'px', top: (H() - bigH) / 2 + 'px', width: bigW + 'px', height: bigH + 'px' });
     }));
+    // 2) then shrink back into the queue slot at the left end of the strip
     setTimeout(() => {
-      fly.remove();
-      assignTile(lane, tile, p); // the photo joins the moving row exactly where it landed
-      laneLoop(lane);
-    }, reduce ? 120 : 540);
+      const r = lane.el.getBoundingClientRect();
+      const target = { left: W() / 2 + queueTile.x - w / 2, top: r.top };
+      fly.style.transition = 'left .7s cubic-bezier(.4,0,.2,1), top .7s cubic-bezier(.4,0,.2,1), width .7s cubic-bezier(.4,0,.2,1), height .7s cubic-bezier(.4,0,.2,1)';
+      Object.assign(fly.style, { left: target.left + 'px', top: target.top + 'px', width: w + 'px', height: h + 'px' });
+      setTimeout(() => {
+        fly.remove();
+        assignTile(lane, queueTile, p); // joins the strip and flows into the screen
+        laneLoop(lane);
+      }, reduce ? 120 : 720);
+    }, reduce ? 120 : 560);
   }
-
   function faceSafeScale(p, f, desired) {
     let sMax = desired;
     if (p.fc && p.fc.length) {
@@ -219,7 +229,10 @@ export default function create(ctx) {
     mount(el) { root = el; injectCss(); buildLane(); },
     refresh() {
       const ps = list();
-      if (ps.length) lanes.forEach((lane) => lane.tiles.forEach((t) => { if (!t.p) assignTile(lane, t, ps[(nextIdx++) % ps.length]); }));
+      if (ps.length) lanes.forEach((lane) => {
+        lane.tiles.forEach((t) => { if (!t.p) assignTile(lane, t, ps[(nextIdx++) % ps.length]); });
+        relayout(lane);
+      });
       laneLoopAll(); emptyState();
     },
     add(p) { dropIn(p); },
