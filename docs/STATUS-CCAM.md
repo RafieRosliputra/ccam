@@ -110,6 +110,12 @@ Modules are **plugin files**: `/modules/<id>.js`, each exporting
 `ccam.my/admin` → event → Big screen → **Upload module** (file name becomes the module id, max 200 KB).
 Uploaded files live in `DATA_DIR/modules/` and are served at `/modules/<id>.js`.
 
+- Every photo enters with a **grow** (scale 0.86–0.94 → 1, ease-in-out) plus a small drift; the new-photo
+  fly-in and the pinned/new zooms are kept.
+- Zooms are **face-safe**: `faceSafeScale()` limits the zoom to the largest value that keeps every moderator
+  face box inside the frame (2% margin). Face at the edge ⇒ no zoom; landscape and portrait behave the same.
+- Module URLs are cache-busted per page load (`/modules/<id>.js?v=<n>-<timestamp>`); Cloudflare used to serve
+  the first `?v=1` copy for hours, which hid module updates.
 - Layers are named CSS variables so a module author can re-order them: `--z-module` (3), `--z-overlay` (5),
   `--z-footer` (6), `--z-tag` (7), `--z-banner` (9). Override them inside the module's own `<style>`, e.g.
   `:root { --z-module: 9; }`. The **Main upload banner** (the big "Upload your photos!" message) is above the
