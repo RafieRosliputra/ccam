@@ -482,6 +482,37 @@ r('DELETE', '/api/uploads/:id', (req, res, { params }) => {
   sendJson(res, 200, { ok: true });
 });
 
+// ---------------- big screen: public link, no login ----------------
+// A screen only needs the event id (unguessable UUID). It gets the guest code, the current screen mode,
+// pinned photo, QR popup, backgrounds and the visible photos — never the photographer/organiser codes.
+function screenEventJson(ev) {
+  const bg = bgInfo(ev);
+  return {
+    id: ev.id, title: ev.title, date: ev.date, organiser: ev.organiser, hideName: !!ev.hide_name,
+    status: db.status(ev), startsAt: ev.starts_at, endsAt: ev.ends_at,
+    token: ev.public_token, codes: { public: ev.public_code },
+    settings: db.settingsOf(ev), screenMode: screenMode.get(ev.id) || 'photos',
+    pin: pinState(ev.id), qrUntil: qrState(ev.id),
+    bg: { admin: !!bg.admin, bg1: !!bg.bg1, bg2: !!bg.bg2 },
+  };
+}
+r('GET', '/api/screen/:id', (req, res, { params }) => sendJson(res, 200, { event: screenEventJson(eventOr404(params.id)) }));
+r('GET', '/api/screen/:id/photos', (req, res, { params, query }) => {
+  const ev = eventOr404(params.id);
+  const photos = db.galleryPhotos(ev.id, { filter: 'visible', source: query.get('source') || 'all',
+    before: intOrNull(query.get('before')), after: intOrNull(query.get('after')) });
+  sendJson(res, 200, { photos: photos.map(photoJson) });
+});
+r('GET', '/api/screen/:id/stream', (req, res, { params }) => subscribe(eventOr404(params.id).id, req, res, false));
+// Backgrounds are shown on the public screen, so they are public too.
+r('GET', '/api/screen/:id/bg/:which', (req, res, { params }) => {
+  const ev = eventOr404(params.id);
+  if (params.which === 'admin') return sendBg(req, res, adminBg());
+  if (params.which === 'bg1') return sendBg(req, res, bg1File(ev.id));
+  if (params.which === 'bg2') { const id = bgInfo(ev).bg2; if (!id) fail(404, 'No background'); return serveImage(req, res, ev, db.getPhoto(id), 'orig', false, 'public, max-age=60'); }
+  fail(404, 'Not found');
+});
+
 // ---------------- staff: admin (Cloudflare Access) and organiser (client code) ----------------
 // The same event routes exist under /api/admin and /api/client; `who` decides what is allowed.
 async function staffFor(req, prefix, eventId) {

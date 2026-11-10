@@ -322,6 +322,33 @@ test('platform events and client events never mix hosts', async () => {
   assert.equal((await call('GET', `/api/e/${pTok}`, { host: 'passion.ccam.my' })).status, 200);
 });
 
+test('big screen is a public link: no login, no secret codes', async () => {
+  const org = (await admin('GET', '/api/admin/organizers')).json.organizers.find((o) => o.slug === 'passion');
+  const created = await asJson('POST', '/api/admin/events', { date: '20261110', title: 'Screen Event', organizerId: org.id });
+  assert.equal(created.status, 201, created.text);
+  const id = created.json.event.id;
+  db.updateEvent(id, { starts_at: Date.now(), ends_at: Date.now() + 3600e3 });
+
+  const screen = await call('GET', `/api/screen/${id}`, { host: 'passion.ccam.my' });
+  assert.equal(screen.status, 200);
+  assert.equal(screen.json.event.title, 'Screen Event');
+  assert.equal(screen.json.event.token, created.json.event.token);
+  assert.equal(screen.json.event.codes.public, created.json.event.codes.public);
+  assert.equal(screen.json.event.codes.photographer, undefined);
+  assert.equal(screen.json.event.codes.client, undefined);
+  assert.ok(screen.json.event.settings);
+  assert.ok('screenMode' in screen.json.event);
+
+  const photos = await call('GET', `/api/screen/${id}/photos?filter=visible`, { host: 'passion.ccam.my' });
+  assert.equal(photos.status, 200);
+  assert.ok(Array.isArray(photos.json.photos));
+  // works from any host (a laptop on the venue wifi opening the same link)
+  assert.equal((await call('GET', `/api/screen/${id}`, { host: 'ccam.my' })).status, 200);
+  assert.equal((await call('GET', `/api/screen/${id}`, { host: 'localhost' })).status, 200);
+  assert.equal((await call('GET', '/api/screen/00000000-0000-0000-0000-000000000000')).status, 404);
+  await admin('DELETE', `/api/admin/events/${id}`);
+});
+
 test('tenant contact details replace the platform contact', async () => {
   const cfg = await call('GET', '/auth/config', { host: 'passion.ccam.my' });
   assert.equal(cfg.json.whatsapp, '60127212813');

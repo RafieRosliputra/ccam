@@ -126,7 +126,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 $('#url').textContent = location.host || 'ccam.my';
 $('#qrHost').textContent = location.host || 'ccam.my';
 
-const img = (p, size = 1600) => `${base}/events/${eventId}/photos/${p.id}/img/${size}`;
+let pubToken = '';
+// Images come from the public photo route (/p/<public token>/<photo>/<size>) so the screen works
+// on any laptop/OBS without a login cookie.
+const img = (p, size = 1600) => `/p/${pubToken}/${p.id}/${size}`;
 const fits = (p) => p.status === 'approved' && !p.hidden && (settings.loopSource === 'all' || (settings.loopSource === 'public' ? p.src === 'public' : p.src !== 'public'));
 const fmtCode = (c) => c ? `${c.slice(0, 3)} ${c.slice(3)}` : '— —';
 const setCode = (c) => { $('#code').innerHTML = (c || '------').split('').map((d) => `<b>${d === '-' ? '–' : d}</b>`).join(''); };
@@ -142,10 +145,9 @@ async function get(url) {
 
 async function boot() {
   let info;
-  for (const b of ['/api/client', '/api/admin']) {
-    try { info = await get(`${b}/events/${eventId}`); base = b; break; } catch { /* try next */ }
-  }
-  if (!info) return fail('Open this screen from the admin or organiser panel.');
+  try { info = await get(`/api/screen/${eventId}`); } catch { /* fall through */ }
+  if (!info) return fail('This big-screen link is not valid.');
+  base = '/api/screen';
   applyEvent(info.event);
   let all = [], before = null;
   for (let i = 0; i < 20; i++) {
@@ -166,6 +168,7 @@ async function boot() {
 }
 
 function applyEvent(ev) {
+  if (ev.token) pubToken = ev.token;
   settings = { ...settings, ...ev.settings };
   if (ev.codes?.public !== curCode) { curCode = ev.codes?.public || ''; setCode(curCode); }
   if (ev.qrUntil && ev.qrUntil > qrShownUntil) showQr(ev.qrUntil, curCode);
