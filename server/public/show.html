@@ -119,6 +119,11 @@ const R = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The screen always advertises the host it was opened on — set before any fetch so it is
+// correct even while the event is still loading (or when the caller is not signed in yet).
+$('#url').textContent = location.host || 'ccam.my';
+$('#qrHost').textContent = location.host || 'ccam.my';
+
 const img = (p, size = 1600) => `${base}/events/${eventId}/photos/${p.id}/img/${size}`;
 const fits = (p) => p.status === 'approved' && !p.hidden && (settings.loopSource === 'all' || (settings.loopSource === 'public' ? p.src === 'public' : p.src !== 'public'));
 const fmtCode = (c) => c ? `${c.slice(0, 3)} ${c.slice(3)}` : '— —';
