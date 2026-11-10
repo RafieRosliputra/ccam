@@ -61,7 +61,7 @@ function serveBrandAsset(req, res, slug, file) {
 }
 
 /** The Umami tag only on public pages (not admin, panel or the big screen). */
-function umamiAllowed(base) { return ['index.html', 'gallery.html', 'shoot.html', 'download.html', '404.html'].includes(base); }
+function umamiAllowed(base) { return ['index.html', 'gallery.html', 'shoot.html', 'download.html', 'livescreen.html', '404.html'].includes(base); }
 
 function renderHtml(file, tenantInfo) {
   const base = path.basename(file);
