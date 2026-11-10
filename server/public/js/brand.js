@@ -99,9 +99,9 @@
   nodes.forEach(function (n) { n.nodeValue = replaceText(n.nodeValue); });
 
   // ---- footer credit: "Servis disediakan oleh JohorStudio.com" ----
-  var credit = B.disclaimer || 'platform provided by JohorStudio.com';
+  // Fixed platform credit (never rewritten by the brand text pass and never taken from a
+  // client-edited disclaimer, so it always reads exactly this).
   var creditHtml = 'platform provided by <a href="https://johorstudio.com" target="_blank" rel="noopener" data-platform-credit>JohorStudio.com</a>';
-  if (credit.indexOf('JohorStudio.com') === -1) creditHtml = credit;
   // Footer: never wipe the footer's innerHTML — the pages still use elements inside it (#yr, links).
   // Hide the platform-only lines (company no., address, admin links) and append the credit instead.
   document.querySelectorAll('footer.site, .site-footer, #sitefooter').forEach(function (f) {
@@ -112,6 +112,7 @@
     }
     var block = document.createElement('div');
     block.setAttribute('data-platform-credit-block', '1');
+    block.setAttribute('data-brand-lock', '1');   // keep the brand text rewriter away
     // Centred bottom line: "platform provided by JohorStudio.com · Admin"
     block.setAttribute('style', 'flex:1 1 100%;width:100%;text-align:center;opacity:.9;font-size:13px;padding-top:6px');
     block.innerHTML = creditHtml + ' · <a href="/admin" style="color:inherit">Admin</a>';
