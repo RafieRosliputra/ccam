@@ -99,7 +99,7 @@ The big screen now has **three photo modules** and is extensible:
 
 | Module | What it does |
 |---|---|
-| `slides` (built-in) | the original one-photo-at-a-time slideshow (Ken Burns, polaroid background) |
+| `slides` (built-in) | the original one-photo-at-a-time slideshow (Ken Burns, polaroid background). Every photo carries its uploader name at the bottom-left (`by <name>`), 5 px above the footer, same pill design as the NEW tag; a genuinely new photo briefly shows the pulsing **NEW** badge there instead |
 | `carousel` | exactly **two columns (left/right)** scrolling in opposite directions, filling the screen. A new photo slides straight into a column (no pop-up). After ~5 s without a new photo, a random photo **grows out of its own carousel tile** (its rectangle animates from the tile to full screen, so it is obvious where it came from), then a ~30% zoom anchored on the face area (`object-position` + `transform-origin`, so landscape and portrait photos both keep the faces in view), with the uploader tag 5 px above the footer; then it shrinks back into the tile. A pinned photo pauses the columns and stays popped-out until released |
 | `cinema` | a huge hero photo with a slowly moving filmstrip underneath. A new photo flies into the strip and then takes over the hero; a pinned photo pops up full screen and returns to the strip |
 
