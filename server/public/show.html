@@ -152,7 +152,7 @@ async function boot() {
   let all = [], before = null;
   for (let i = 0; i < 20; i++) {
     const q = new URLSearchParams({ filter: 'visible' }); if (before) q.set('before', before);
-    const page = (await get(`${base}/events/${eventId}/photos?${q}`)).photos;
+    const page = (await get(`${base}/${eventId}/photos?${q}`)).photos;
     all.push(...page);
     if (page.length < 120) break;
     before = Math.min(...page.map((p) => p.seq));
@@ -317,7 +317,7 @@ function setScreen(mode, v) {
   screenMode = mode; screenV = v || Date.now();
   if (mode === 'photos') { el.classList.remove('on'); return; }
   if (mode === 'black') { el.style.backgroundImage = ''; el.classList.add('on'); return; }
-  const url = `${base}/events/${eventId}/bg/${mode}?v=${screenV}`;
+  const url = `${base}/${eventId}/bg/${mode}?v=${screenV}`;
   const pre = new Image();
   pre.onload = pre.onerror = () => { el.style.backgroundImage = `url("${url}")`; el.classList.add('on'); };
   pre.src = url;
@@ -500,7 +500,7 @@ function showBubble() {
 }
 
 function connect() {
-  const es = new EventSource(`${base}/events/${eventId}/stream`);
+  const es = new EventSource(`${base}/${eventId}/stream`);
   es.addEventListener('photo', (e) => addPhoto(JSON.parse(e.data)));
   es.addEventListener('remove', (e) => removePhoto(JSON.parse(e.data).id));
   es.addEventListener('settings', (e) => { const d = JSON.parse(e.data); settings = { ...settings, ...d.settings }; if (d.code && d.code !== curCode) { curCode = d.code; setCode(d.code); } rebuildLoop(); });
