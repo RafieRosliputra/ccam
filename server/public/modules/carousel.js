@@ -109,6 +109,26 @@ export default function create(ctx) {
   }
   function hideTag() { if (tagEl) { tagEl.remove(); tagEl = null; } }
 
+  // largest zoom that keeps every detected face inside the pop-up frame (2% margin)
+  function faceSafeScale(p, f, desired) {
+    let sMax = desired;
+    if (p.fc && p.fc.length) {
+      const m = 0.02;
+      for (const [x0, y0, x1, y1] of p.fc) {
+        for (const ux of [x0, x1]) {
+          const dx = ux - f[0];
+          if (dx > 0.001) sMax = Math.min(sMax, (1 - m - f[0]) / dx);
+          else if (dx < -0.001) sMax = Math.min(sMax, (f[0] - m) / (-dx));
+        }
+        for (const uy of [y0, y1]) {
+          const dy = uy - f[1];
+          if (dy > 0.001) sMax = Math.min(sMax, (1 - m - f[1]) / dy);
+          else if (dy < -0.001) sMax = Math.min(sMax, (f[1] - m) / (-dy));
+        }
+      }
+    }
+    return Math.max(1, Math.min(desired, sMax));
+  }
   function focusOf(p) {
     if (p.fc && p.fc.length) {
       let sx = 0, sy = 0, sw = 0;
@@ -152,7 +172,7 @@ export default function create(ctx) {
     setTimeout(() => {
       im.style.transition = `transform ${zoomInMs}ms cubic-bezier(.4,0,.2,1)`;
       im.style.transformOrigin = `${Math.round(fx * 100)}% ${Math.round(fy * 100)}%`;
-      im.style.transform = `scale(${reduce ? 1 : R(1.26, 1.34)})`;
+      im.style.transform = `scale(${reduce ? 1 : faceSafeScale(p, [fx, fy], R(1.26, 1.34))})`;
       setTimeout(() => {
         if (pinned) return; // pinned stays zoomed until released
         im.style.transition = `transform ${zoomOutMs}ms cubic-bezier(.4,0,.2,1)`;
