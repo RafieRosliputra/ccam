@@ -257,7 +257,7 @@ function render() {
       </div>
       <div class="row">
         <button class="btn" id="qrBtn">${icon.qr}Show QR on big screen</button>
-        <a class="btn ghost" href="/show/${e.id}" target="_blank" rel="noopener">Open big screen</a>
+        <a class="btn ghost" href="/show/${e.id}?v=${Date.now()}" target="_blank" rel="noopener">Open big screen</a>
         <button class="btn ghost" id="copyScreen">Copy big-screen link</button>
         <button class="btn ghost" id="copyLink">Copy gallery link</button>
       </div>
