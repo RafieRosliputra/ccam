@@ -258,6 +258,7 @@ function render() {
       <div class="row">
         <button class="btn" id="qrBtn">${icon.qr}Show QR on big screen</button>
         <a class="btn ghost" href="/show/${e.id}" target="_blank" rel="noopener">Open big screen</a>
+        <button class="btn ghost" id="copyScreen">Copy big-screen link</button>
         <button class="btn ghost" id="copyLink">Copy gallery link</button>
       </div>
     </div>
@@ -412,6 +413,7 @@ function wire(e, admin) {
   $$('[data-qr]').forEach((b) => b.onclick = () => showQr(b.dataset.qr, b.dataset.qrlbl, b.dataset.qrnum));
   $('#backBtn').onclick = () => { $('#view').classList.remove('detail-open'); };
   $('#copyLink').onclick = () => copyText(e.url);
+  $('#copyScreen') && ($('#copyScreen').onclick = () => copyText(`${evBase()}/show/${e.id}`));
   qrUntil = e.qrUntil || 0; qrTick();
   bigScreenCard();
   if (e.download && admin) {
