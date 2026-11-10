@@ -36,13 +36,15 @@
   /* Footer: floating glass pill. Camera "clicks" with a flash, URL shimmers, code digits hop one by one. */
   footer { position: absolute; left: 50%; bottom: calc(var(--u) * 3 + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: calc(var(--u) * 1.1);
     padding: calc(var(--u) * .55) calc(var(--u) * 1.4) calc(var(--u) * .55) calc(var(--u) * .6); border-radius: 999px; background: rgba(15,20,22,.62);
-    -webkit-backdrop-filter: blur(calc(var(--u) * 1.2)); backdrop-filter: blur(calc(var(--u) * 1.2)); border: 1px solid rgba(255,255,255,.18);
-    font-size: max(13px, calc(var(--u) * 1.35)); font-weight: 700; white-space: nowrap; box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0,0,0,.4); }
+    -webkit-backdrop-filter: blur(calc(var(--u) * 1.2)); backdrop-filter: blur(calc(var(--u) * 1.2)); border: 1px solid rgba(255,255,255,.26);
+    font-size: max(13px, calc(var(--u) * 1.35)); font-weight: 700; white-space: nowrap; box-shadow: 0 calc(var(--u) * 1.2) calc(var(--u) * 3.4) rgba(0,0,0,.55);
+    color: #f4f7f8; background: rgba(9,12,14,.86); }
   footer .cam { width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); min-width: 24px; min-height: 24px; border-radius: 50%; background: var(--tally); display: grid; place-items: center; position: relative; flex: none; }
   footer .cam svg { width: 55%; height: 55%; }
   footer .cam::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #fff; opacity: 0; }
-  footer .dot { width: calc(var(--u) * .35); height: calc(var(--u) * .35); min-width: 4px; min-height: 4px; border-radius: 50%; background: rgba(255,255,255,.35); }
-  footer .url { background: linear-gradient(100deg, var(--teal) 0 40%, #fff 50%, var(--teal) 60% 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; }
+  footer .dot { width: calc(var(--u) * .35); height: calc(var(--u) * .35); min-width: 4px; min-height: 4px; border-radius: 50%; background: rgba(255,255,255,.5); }
+  footer .url { background: linear-gradient(100deg, #dbe6e8 0 40%, #ffffff 50%, #dbe6e8 60% 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 calc(var(--u) * .6) rgba(255,255,255,.18); }
   footer .codewrap { display: flex; align-items: center; gap: calc(var(--u) * .35); }
   footer .digits { display: flex; gap: calc(var(--u) * .22); }
   footer .digits b { display: grid; place-items: center; width: 1.37em; height: 1.7em; border-radius: .3em; background: #fff; color: #1d2528; font-size: 1.07em; font-weight: 900; font-variant-numeric: tabular-nums; }
