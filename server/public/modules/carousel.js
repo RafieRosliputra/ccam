@@ -105,7 +105,7 @@ export default function create(ctx) {
     im.style.transform = 'none';
     im.src = img(p);
     pop.classList.add('on');
-    im.style.objectFit = 'cover';
+    im.style.objectFit = 'contain';
     im.style.clipPath = `inset(${r0.top}px ${W() - r0.left - r0.width}px ${H() - r0.top - r0.height}px ${r0.left}px)`;
     void im.offsetWidth;
     im.style.transition = 'clip-path .55s cubic-bezier(.2,.8,.2,1)';
@@ -174,7 +174,7 @@ export default function create(ctx) {
       im.src = img(p); im.style.transition = 'none'; im.style.transform = 'none'; im.style.clipPath = 'none';
       popEl2.classList.add('on'); showTag(p);
       const [fx, fy] = focusOf(p);
-      im.style.objectFit = 'cover';
+      im.style.objectFit = 'contain';
       im.style.clipPath = `inset(${r0.top}px ${W() - r0.left - r0.width}px ${H() - r0.top - r0.height}px ${r0.left}px)`;
       void im.offsetWidth;
       im.style.transition = 'clip-path .55s cubic-bezier(.2,.8,.2,1)';
