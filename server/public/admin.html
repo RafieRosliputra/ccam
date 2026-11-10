@@ -280,7 +280,7 @@ function render() {
       <div class="bub">
         <div class="row" style="justify-content:space-between"><b>Main upload banner</b>
           <span class="row"><button class="btn small" id="bubNow" type="button">Show now</button>
-          <button class="btn small ghost" id="bubOn" type="button" aria-pressed="${e.settings.bubbleOn !== false}">${e.settings.bubbleOn !== false ? 'Showing: on' : 'Hidden'}</button></span></div>
+          <button class="btn small ghost" id="bubOn" type="button" aria-pressed="${e.settings.bubbleOn !== false}">${e.settings.bubbleOn !== false ? 'Banner: shown' : 'Banner: hidden'}</button></span></div>
         <span class="small muted">Appears on the big screen when no new photo has come in for a while.</span>
         <div class="bubgrid">
           <label class="inline">Message<input class="input" id="bubText" maxlength="60" value="${esc(e.settings.bubbleText || 'Upload your photos!')}"></label>
@@ -542,12 +542,12 @@ function bigScreenCard() {
   // "Upload your photos!" message
   const bub = async (body, msg) => {
     try { const r = await api('POST', `${BASE}/events/${cur.event.id}/bubble`, body); cur.event.settings = r.settings;
-      const on = r.settings.bubbleOn !== false; $('#bubOn').setAttribute('aria-pressed', String(on)); $('#bubOn').textContent = on ? 'Showing: on' : 'Hidden'; toast(msg); }
+      const on = r.settings.bubbleOn !== false; $('#bubOn').setAttribute('aria-pressed', String(on)); $('#bubOn').textContent = on ? 'Banner: shown' : 'Banner: hidden'; toast(msg); }
     catch (err) { toast(err.message, 5000); }
   };
   const fields = () => ({ text: $('#bubText').value, every: $('#bubEvery').value, for: $('#bubFor').value });
   $('#bubNow').onclick = () => bub({ ...fields(), now: true }, 'Showing on the big screen now');
-  $('#bubOn').onclick = () => { const on = $('#bubOn').getAttribute('aria-pressed') !== 'true'; bub({ ...fields(), on }, on ? 'Message on' : 'Message hidden'); };
+  $('#bubOn').onclick = () => { const on = $('#bubOn').getAttribute('aria-pressed') !== 'true'; bub({ ...fields(), on }, on ? 'Main upload banner: shown' : 'Main upload banner: hidden'); };
   $('#bubSave').onclick = () => bub(fields(), 'Message saved');
   $('#bg1Up').onclick = () => pickPicture(async (blob) => {
     const r = await fetch(`${BASE}/events/${cur.event.id}/bg/bg1`, { method: 'PUT', body: blob, credentials: 'same-origin' });
