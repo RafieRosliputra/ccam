@@ -100,7 +100,7 @@ The big screen now has **three photo modules** and is extensible:
 | Module | What it does |
 |---|---|
 | `slides` (built-in) | the original one-photo-at-a-time slideshow (Ken Burns, polaroid background) |
-| `carousel` | full-screen columns of photos scrolling upwards (alternating directions). A new photo flies in oversized from a random screen edge and drops into its tile; a pinned photo pauses the scroll and pops from its tile to full screen, then returns |
+| `carousel` | exactly **two columns (left/right)** scrolling in opposite directions, filling the screen. A new photo slides straight into a column (no pop-up). After ~5 s without a new photo, a random photo pops out to full screen: the whole photo first (contain), then a ~30% zoom anchored on its faces / upper-middle, with the uploader tag 5 px above the footer; then it returns. A pinned photo pauses the columns and stays popped-out until released |
 | `cinema` | a huge hero photo with a slowly moving filmstrip underneath. A new photo flies into the strip and then takes over the hero; a pinned photo pops up full screen and returns to the strip |
 
 Modules are **plugin files**: `/modules/<id>.js`, each exporting
