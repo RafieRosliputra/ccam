@@ -252,7 +252,7 @@ function render() {
       <h3>Codes for the big screen</h3>
       <div class="codes">
         ${codeCard('Guests', 'public', e.codes.public, admin, 'Shown on the LED screen. Changes every time the event goes live or closes.')}
-        ${admin ? codeCard('Photographers', 'photographer', e.codes.photographer, admin, 'For JS Tether and photographers. Do not show on screen.') : ''}
+        ${codeCard('Photographers', 'photographer', e.codes.photographer, admin, 'For JS Tether and photographers. Do not show on screen.')}
         ${admin ? codeCard('Organiser', 'client', e.codes.client, admin, 'Give to the client. Works until 7 days after the event.') : ''}
       </div>
       <div class="row">
