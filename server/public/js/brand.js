@@ -165,7 +165,7 @@
   // ---- platform landing only: services + "Our clients" ----
   if (B.kind === 'platform') {
     var services = document.getElementById('servicesSection');
-    if (services) services.hidden = false;
+    if (services) services.classList.remove('hidden');
     var section = document.getElementById('clientsSection');
     if (section) {
       fetch('/api/clients', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
@@ -176,7 +176,7 @@
           var logo = c.logo ? '<img src="' + attr(c.logo) + '" alt="" loading="lazy">' : '<span class="cc-initial">' + escHtml((c.name || c.slug || '?').slice(0, 1)) + '</span>';
           return '<a class="clientcard" href="' + attr(c.url) + '" target="_blank" rel="noopener" style="--cc:' + attr(c.color || '#111827') + '">' + logo + '<b>' + escHtml(c.name || c.slug) + '</b><small>' + escHtml(c.slug + '.ccam.my') + '</small></a>';
         }).join('');
-        section.hidden = false;
+        section.classList.remove('hidden');
       }).catch(function () { /* clients are optional */ });
     }
   }
