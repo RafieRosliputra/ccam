@@ -20,6 +20,14 @@ Production is live on Cloudflare + m10. `live.johorstudio.com` is untouched (sta
 raw files redirect to the clean (Access-protected) URLs. A client host only ever serves its own events
 (gallery `/e/…`, code login `/auth/code`, QR `/c/…`, `/show`, `/d`, uploads, live-status, showcase, `/api/me`).
 
+## Link rule (important)
+
+Every event link is built from the **owning client**, never from the host the page happens to be served on:
+`eventBase(ev)` → `https://<organizer slug>.ccam.my` (or `https://ccam.my` for platform events). That covers
+guest `/c/<code>`, photographer `/join/<code>`, organiser `/c/<code>?r=o`, gallery `/e/<token>` and download `/d/<token>`.
+The big screen (`/show/<id>`) advertises `location.host` in its footer/QR popup (so `sarwa.ccam.my` shows
+`sarwa.ccam.my`) and keeps the floating footer lifted ~3vw off the bottom edge (safe-area aware).
+
 ## Infra
 
 - **m10 TrueNAS custom app `ccam`** (port **8101**), container `ccam` + `ccam-moderator` (port 8096 internal).
