@@ -284,6 +284,9 @@ test('platform events and client events never mix hosts', async () => {
   const clientEv = await asJson('POST', '/api/admin/events', { date: '20261110', title: 'Passion Gala', organizerId: org.id });
   assert.equal(clientEv.status, 201, clientEv.text);
   assert.equal(clientEv.json.event.organizerId, org.id);
+  // admin-made links must point at the client's own domain, not the admin host
+  assert.match(clientEv.json.event.codeUrl, /^https:\/\/passion\.ccam\.my\/c\/[0-9]{6}$/);
+  assert.match(clientEv.json.event.url, /^https:\/\/passion\.ccam\.my\/e\//);
   const bad = await asJson('POST', '/api/admin/events', { date: '20261110', title: 'Nope', organizerId: 'nope' });
   assert.equal(bad.status, 400);
 
@@ -295,6 +298,9 @@ test('platform events and client events never mix hosts', async () => {
   assert.equal((await call('GET', `/api/e/${pTok}`, { host: 'passion.ccam.my' })).status, 404);
   assert.equal((await call('GET', `/api/e/${cTok}`, { host: 'passion.ccam.my' })).status, 200);
   assert.equal((await call('GET', `/api/e/${cTok}`, { host: 'ccam.my' })).status, 404);
+  const adminView = await admin('GET', `/api/admin/events/${clientEv.json.event.id}`);
+  assert.match(adminView.json.event.codeUrl, /^https:\/\/passion\.ccam\.my\//);
+  assert.match(adminView.json.event.url, /^https:\/\/passion\.ccam\.my\/e\//);
 
   // a code only works on the host that owns the event
   const code = platformEv.json.event.codes.public;

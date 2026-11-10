@@ -105,8 +105,8 @@
 <header class="topbar">
   <div class="wrap">
     <a class="brand" href="https://johorstudio.com" aria-label="JohorStudio.com"><span class="brand-name">JohorStudio.com</span></a>
-    <a class="live-home" href="https://live.johorstudio.com">Live home</a>
-    <a class="hlink" href="https://live.johorstudio.com/admin">Events</a>
+    <a class="live-home" href="https://ccam.my">Live home</a>
+    <a class="hlink" href="https://ccam.my/admin">Events</a>
     <div class="usermenu"><span id="me"></span></div>
   </div>
 </header>
@@ -171,7 +171,7 @@ const LOGO_KINDS = [
 ];
 
 let zone = 'ccam.my';
-let adminHost = 'live.johorstudio.com';
+let adminHost = 'ccam.my';
 let apexMode = 'redirect';
 let disclaimer = 'Servis disediakan oleh JohorStudio.com';
 let orgs = [];
@@ -1081,7 +1081,7 @@ function renderPlatform() {
   const b = platBrands[platSet] || {};
   const tabs = $('#platTabs');
   if (tabs) {
-    tabs.innerHTML = [['platform', `live.johorstudio.com`], ['apex', `${zone} apex`]]
+    tabs.innerHTML = [['platform', `${zone} platform`], ['apex', `${zone} apex`]]
       .map(([k, l]) => `<button class="tab" type="button" data-plat="${k}" aria-pressed="${platSet === k}">${esc(l)}</button>`).join('');
     $$('#platTabs [data-plat]').forEach((btn) => {
       btn.onclick = () => { platSet = btn.dataset.plat; renderPlatform(); };

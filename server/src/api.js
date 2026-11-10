@@ -45,8 +45,16 @@ export function photoJson(p) {
 }
 setPhotoSerializer(photoJson);
 
-const galleryUrl = (ev) => `${publicBase()}/e/${ev.public_token}`;
-const codeUrl = (code) => `${publicBase()}/c/${code}`;
+/** Host that owns an event: the client's own subdomain, or the platform for platform events. */
+function eventBase(ev) {
+  if (ev && ev.organizer_id) {
+    const org = db.getOrganizer(ev.organizer_id);
+    if (org && org.slug) return `https://${org.slug}.${config.tenantZone}`;
+  }
+  return publicBase();
+}
+const galleryUrl = (ev) => `${eventBase(ev)}/e/${ev.public_token}`;
+const codeUrl = (code, ev) => `${eventBase(ev)}/c/${code}`;
 const parseReq = (ev) => { try { return ev.request ? JSON.parse(ev.request) : null; } catch { return null; } };
 
 // QR on the big screen, shown from the admin or organiser panel for settings.qrSec seconds (in memory only).
@@ -84,7 +92,7 @@ const qrState = (id) => { const u = qrUntil.get(id) || 0; return u > Date.now() 
 
 // ---- download-all link: made when the event ends or is closed, valid DL_DAYS, +DL_DAYS each time the admin extends ----
 const DL_DAYS = 7;
-const dlUrl = (ev) => `${publicBase()}/d/${ev.dl_token}`;
+const dlUrl = (ev) => `${eventBase(ev)}/d/${ev.dl_token}`;
 function ensureDownload(ev) {
   const st = db.status(ev);
   if (ev.dl_token || (st !== 'closed' && st !== 'ended')) return ev;
@@ -104,7 +112,7 @@ function staffEventJson(ev, role = 'admin') {
     id: ev.id, folder: ev.folder_name, date: ev.date, title: ev.title, organiser: ev.organiser, organizerId: ev.organizer_id || '', hideName: !!ev.hide_name,
     token: ev.public_token, url: galleryUrl(ev), status: db.status(ev), startsAt: ev.starts_at, endsAt: ev.ends_at, closedAt: ev.closed_at,
     codes: { public: ev.public_code, photographer: ev.photo_code, client: ev.client_code },
-    codeUrl: codeUrl(ev.public_code), publicUpload: !!ev.public_upload_on, showcase: !!ev.showcase,
+    codeUrl: codeUrl(ev.public_code, ev), publicUpload: !!ev.public_upload_on, showcase: !!ev.showcase,
     settings: db.settingsOf(ev), request: parseReq(ev), createdAt: ev.created_at, download: dlJson(ev, role), qrUntil: qrState(ev.id), screenMode: screenMode.get(ev.id) || 'photos', pin: pinState(ev.id), bg: bgInfo(ev),
     photoCount: c.photo_count || 0, guestCount: c.guest_count || 0, reviewCount: c.review_count || 0, blockedCount: c.blocked_count || 0,
   };
@@ -302,7 +310,7 @@ r('GET', '/s/:photo/:size', (req, res, { params }) => {
 // ---------------- photographer ----------------
 r('GET', '/api/shoot', (req, res) => {
   const { session, event } = requireSessionOnHost(req, 'photographer');
-  sendJson(res, 200, { event: { ...publicEventJson(event), id: event.id }, name: session.name, slot: session.slot, folder: storage.sourceFolder('photographer', session.slot), guestUrl: codeUrl(event.public_code), guestCode: event.public_code });
+  sendJson(res, 200, { event: { ...publicEventJson(event), id: event.id }, name: session.name, slot: session.slot, folder: storage.sourceFolder('photographer', session.slot), guestUrl: codeUrl(event.public_code, event), guestCode: event.public_code });
 });
 // Photographer's own photos (Photographer N folder): list, thumbnail, delete.
 r('GET', '/api/shoot/photos', (req, res, { query }) => {
@@ -606,7 +614,7 @@ for (const prefix of ['admin', 'client']) {
     const body = await readJson(req);
     const until = body.on ? Date.now() + db.settingsOf(ev).qrSec * 1000 : 0;
     if (until) qrUntil.set(ev.id, until); else qrUntil.delete(ev.id);
-    publish(ev.id, 'qr', { until, code: ev.public_code, url: codeUrl(ev.public_code) });
+    publish(ev.id, 'qr', { until, code: ev.public_code, url: codeUrl(ev.public_code, ev) });
     sendJson(res, 200, { until });
   });
   r('GET', `${P}/events/:id/photos/:photo/img/:size`, async (req, res, { params, query }) => {
