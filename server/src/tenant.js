@@ -10,8 +10,17 @@
 // The brand is applied by injecting CSS variables + window.__BRAND into <head> (server-side) and by
 // public/js/brand.js (text, logo, footer disclaimer) in the browser. Nothing is templated in the HTML
 // files: they stay the plain JohorStudio pages.
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import * as db from './db.js';
+
+// Cache-buster: Cloudflare/the browser keep /js/brand.js for hours, so version the URL by the
+// file's mtime. A deploy that changes brand.js is picked up on the next page load (no hard refresh).
+const BRAND_JS_PATH = fileURLToPath(new URL('../public/js/brand.js', import.meta.url));
+function brandVersion() {
+  try { return String(Math.round(fs.statSync(BRAND_JS_PATH).mtimeMs)); } catch { return '1'; }
+}
 
 export const DEFAULT_BRAND = {
   name: 'CCAM',
@@ -314,7 +323,7 @@ export function injectHtml(html, tenant) {
   const icon = b.favicon || b.logo;
   if (icon) parts.push(`<link rel="icon" href="${escapeAttr(icon)}">`);
   parts.push(`<script>window.__BRAND=${JSON.stringify(payload).replace(/</g, '\\u003c')};</script>`);
-  parts.push('<script src="/js/brand.js" defer></script>');
+  parts.push(`<script src="/js/brand.js?v=${brandVersion()}" defer></script>`);
   const block = parts.join('\n');
   let out = html;
   // Only titles/meta are rewritten server-side; visible text is handled by brand.js.
