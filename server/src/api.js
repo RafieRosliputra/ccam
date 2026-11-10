@@ -62,6 +62,30 @@ const qrUntil = new Map(); // eventId -> ms
 // Big screen mode per event: 'photos' (normal) | 'black' | 'admin' | 'bg1' | 'bg2' (in memory; a restart goes back to photos)
 const screenMode = new Map();
 const SCREEN_MODES = ['photos', 'black', 'admin', 'bg1', 'bg2'];
+// Photo display modules for the big screen. "slides" is built into show.html; every other module is a
+// plugin file /modules/<id>.js (built-in ones under server/public/modules, admin-uploaded ones under
+// DATA_DIR/modules). Each event stores its chosen module in its settings JSON.
+const MODULE_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const builtinModulesDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'public', 'modules');
+const customModulesDir = () => path.join(config.dataDir, 'modules');
+function moduleFiles(dir) {
+  try { return fs.readdirSync(dir).filter((f) => MODULE_ID_RE.test(f.replace(/\.js$/, '')) && f.endsWith('.js')).map((f) => f.replace(/\.js$/, '')); }
+  catch { return []; }
+}
+function moduleList() {
+  const builtin = moduleFiles(builtinModulesDir);
+  const custom = moduleFiles(customModulesDir()).filter((id) => !builtin.includes(id));
+  return [{ id: 'slides', builtin: true }, ...builtin.map((id) => ({ id, builtin: true })), ...custom.map((id) => ({ id, builtin: false }))];
+}
+function moduleFile(id) {
+  if (!MODULE_ID_RE.test(id)) return null;
+  for (const dir of [builtinModulesDir, customModulesDir()]) {
+    const f = path.join(dir, `${id}.js`);
+    if (fs.existsSync(f)) return f;
+  }
+  return null;
+}
+const moduleOf = (ev) => { const m = db.settingsOf(ev).module; return MODULE_ID_RE.test(String(m || '')) ? m : 'slides'; };
 // Photo pinned to the big screen: eventId -> { id, until } (until 0 = locked until Release)
 const pins = new Map();
 const pinState = (id) => { const p = pins.get(id); if (p && p.until && p.until < Date.now()) { pins.delete(id); return null; } return p || null; };
@@ -115,7 +139,7 @@ function staffEventJson(ev, role = 'admin') {
     codeUrl: codeUrl(ev.public_code, ev), joinUrl: `${eventBase(ev)}/join/${ev.photo_code}`,
     organiserUrl: `${eventBase(ev)}/c/${ev.client_code}?r=o`, dlUrl: `${eventBase(ev)}/d/${ev.dl_token}`,
     publicUpload: !!ev.public_upload_on, showcase: !!ev.showcase,
-    settings: db.settingsOf(ev), request: parseReq(ev), createdAt: ev.created_at, download: dlJson(ev, role), qrUntil: qrState(ev.id), screenMode: screenMode.get(ev.id) || 'photos', pin: pinState(ev.id), bg: bgInfo(ev),
+    settings: db.settingsOf(ev), request: parseReq(ev), createdAt: ev.created_at, download: dlJson(ev, role), qrUntil: qrState(ev.id), screenMode: screenMode.get(ev.id) || 'photos', module: moduleOf(ev), pin: pinState(ev.id), bg: bgInfo(ev),
     photoCount: c.photo_count || 0, guestCount: c.guest_count || 0, reviewCount: c.review_count || 0, blockedCount: c.blocked_count || 0,
   };
 }
@@ -482,6 +506,17 @@ r('DELETE', '/api/uploads/:id', (req, res, { params }) => {
   sendJson(res, 200, { ok: true });
 });
 
+// ---------------- big-screen modules: list, serve, upload ----------------
+r('GET', '/api/modules', (req, res) => sendJson(res, 200, { modules: moduleList() }, { 'cache-control': 'no-cache' }));
+r('GET', '/modules/:name', (req, res, { params }) => {
+  const id = String(params.name || '').replace(/\.js$/, '');
+  const file = moduleFile(id);
+  if (!file) fail(404, 'Module not found');
+  const body = fs.readFileSync(file);
+  res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': body.length,
+    'cache-control': 'no-cache', etag: `"mod-${id}-${Math.floor(fs.statSync(file).mtimeMs)}"`, vary: 'Host' });
+  res.end(req.method === 'HEAD' ? undefined : body);
+});
 // ---------------- big screen: public link, no login ----------------
 // A screen only needs the event id (unguessable UUID). It gets the guest code, the current screen mode,
 // pinned photo, QR popup, backgrounds and the visible photos — never the photographer/organiser codes.
@@ -491,7 +526,7 @@ function screenEventJson(ev) {
     id: ev.id, title: ev.title, date: ev.date, organiser: ev.organiser, hideName: !!ev.hide_name,
     status: db.status(ev), startsAt: ev.starts_at, endsAt: ev.ends_at,
     token: ev.public_token, codes: { public: ev.public_code },
-    settings: db.settingsOf(ev), screenMode: screenMode.get(ev.id) || 'photos',
+    settings: db.settingsOf(ev), screenMode: screenMode.get(ev.id) || 'photos', module: moduleOf(ev),
     pin: pinState(ev.id), qrUntil: qrState(ev.id),
     bg: { admin: !!bg.admin, bg1: !!bg.bg1, bg2: !!bg.bg2 },
   };
@@ -580,6 +615,16 @@ for (const prefix of ['admin', 'client']) {
     if (mode === 'photos') screenMode.delete(ev.id); else screenMode.set(ev.id, mode);
     publish(ev.id, 'screen', { mode, v: Date.now() });
     sendJson(res, 200, { mode });
+  });
+  // Photo display module for this event (slides / an uploaded plugin).
+  r('POST', `${P}/events/:id/module`, async (req, res, { params }) => {
+    const { ev } = await staffFor(req, prefix, params.id);
+    const body = await readJson(req);
+    const module = String(body.module || 'slides');
+    if (module !== 'slides' && !moduleFile(module)) fail(400, 'Unknown big-screen module');
+    const out = db.updateEvent(ev.id, { settings: JSON.stringify({ ...db.settingsOf(ev), module }) });
+    publish(ev.id, 'module', { module });
+    sendJson(res, 200, { module: moduleOf(out) });
   });
   // Background pictures for the big screen.
   r('GET', `${P}/events/:id/bg/:which`, async (req, res, { params }) => {
@@ -1148,3 +1193,23 @@ function serveImage(req, res, ev, p, size, download, cacheControl) {
   if (req.method === 'HEAD') return res.end();
   fs.createReadStream(file).pipe(res);
 }
+
+// ---------------- admin: big-screen modules (upload / delete) ----------------
+A('GET', '/modules', (req, res) => sendJson(res, 200, { modules: moduleList() }));
+A('POST', '/modules/upload', async (req, res) => {
+  const id = String(req.headers['x-name'] || '').replace(/\.js$/i, '').toLowerCase();
+  if (!MODULE_ID_RE.test(id)) fail(400, 'Module name: a-z, 0-9 and dashes only (max 32)');
+  const body = await readBody(req, 200 * 1024);
+  if (!body.length) fail(400, 'Empty module');
+  fs.mkdirSync(customModulesDir(), { recursive: true });
+  fs.writeFileSync(path.join(customModulesDir(), `${id}.js`), body);
+  sendJson(res, 200, { module: { id, builtin: false }, modules: moduleList() });
+});
+A('DELETE', '/modules/:name', (req, res, { params }) => {
+  const id = String(params.name || '').replace(/\.js$/, '');
+  const f = path.join(customModulesDir(), `${id}.js`);
+  if (!fs.existsSync(f)) fail(404, 'Uploaded module not found');
+  fs.rmSync(f, { force: true });
+  sendJson(res, 200, { modules: moduleList() });
+});
+

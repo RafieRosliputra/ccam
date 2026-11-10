@@ -338,6 +338,35 @@ test('big screen is a public link: no login, no secret codes', async () => {
   assert.equal(screen.json.event.codes.client, undefined);
   assert.ok(screen.json.event.settings);
   assert.ok('screenMode' in screen.json.event);
+  assert.equal(screen.json.event.module, 'slides');
+  // the panel switches the photo module; the public screen follows, and the choice is stored on the event
+  const setMod = await asJson('POST', `/api/admin/events/${id}/module`, { module: 'carousel' });
+  assert.equal(setMod.status, 200);
+  assert.equal(setMod.json.module, 'carousel');
+  assert.equal((await call('GET', `/api/screen/${id}`, { host: 'passion.ccam.my' })).json.event.module, 'carousel');
+  assert.equal((await asJson('POST', `/api/admin/events/${id}/module`, { module: 'nope' })).status, 400);
+
+  // module registry: built-ins are listed and served
+  const mods = await call('GET', '/api/modules', { host: 'passion.ccam.my' });
+  assert.equal(mods.status, 200);
+  assert.deepEqual(mods.json.modules.map((m) => m.id).sort(), ['carousel', 'cinema', 'slides']);
+  const js = await call('GET', '/modules/carousel.js', { host: 'passion.ccam.my' });
+  assert.equal(js.status, 200);
+  assert.match(String(js.headers['content-type']), /javascript/);
+  assert.match(js.text, /export default function create/);
+
+  // admin can upload a plugin, the event can select it, then it can be deleted
+  const plugin = 'export default function create(ctx){ return { mount(){}, refresh(){}, add(){}, remove(){}, pin(){}, destroy(){} }; }\n';
+  let up = await admin('POST', '/api/admin/modules/upload', { body: plugin, headers: { 'x-name': 'my-module', 'content-type': 'text/javascript' } });
+  assert.equal(up.status, 200, up.text);
+  assert.ok(up.json.modules.some((m) => m.id === 'my-module' && m.builtin === false));
+  assert.equal((await call('GET', '/modules/my-module.js', { host: 'passion.ccam.my' })).status, 200);
+  assert.equal((await asJson('POST', `/api/admin/events/${id}/module`, { module: 'my-module' })).json.module, 'my-module');
+  assert.equal((await call('GET', '/modules/my-module.js', { host: 'passion.ccam.my' })).text, plugin);
+  up = await admin('DELETE', '/api/admin/modules/my-module');
+  assert.equal(up.status, 200);
+  assert.ok(!up.json.modules.some((m) => m.id === 'my-module'));
+  assert.equal((await call('GET', '/modules/my-module.js')).status, 404);
 
   const photos = await call('GET', `/api/screen/${id}/photos?filter=visible`, { host: 'passion.ccam.my' });
   assert.equal(photos.status, 200);

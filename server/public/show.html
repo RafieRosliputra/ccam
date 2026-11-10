@@ -91,6 +91,7 @@
   /* Big screen switched off from the panel: plain black, fades in / out */
   .blackout { position: fixed; inset: 0; z-index: 30; background: #000 center / cover no-repeat; opacity: 0; pointer-events: none; transition: opacity .8s; }
   .blackout.on { opacity: 1; pointer-events: auto; }
+
 </style>
 </head>
 <body>
@@ -105,6 +106,9 @@
   <div class="qrpop" id="qrpop" aria-hidden="true"><div class="qrcard"><img id="qrImg" alt="">
     <div class="qrtext"><span class="k">LIVE PHOTO</span><h2>Scan to send your photos</h2><p>or open <span class="u" id="qrHost">ccam.my</span> and enter</p><span class="c" id="qrCode"></span></div></div></div>
 </div>
+
+<div class="mod" id="modRoot" data-mod="module" hidden></div>
+<div class="mod-overlay" id="modOverlay"><img id="modOverlayImg" alt=""></div>
 <div class="controls" id="controls"><button id="fsBtn" type="button">Full screen</button></div>
 <div class="msg hidden" id="msg"></div>
 <div class="blackout" id="blackout" aria-hidden="true"></div>
@@ -161,6 +165,7 @@ async function boot() {
   loop = all.sort((a, b) => a.seq - b.seq);
   rebuildLoop();
   buildScatter();
+  modRefill();
   if (pinFromEvent) setPin(pinFromEvent);
   next();
   connect();
@@ -169,6 +174,7 @@ async function boot() {
 
 function applyEvent(ev) {
   if (ev.token) pubToken = ev.token;
+  if (ev.module) setModule(ev.module);
   settings = { ...settings, ...ev.settings };
   if (ev.codes?.public !== curCode) { curCode = ev.codes?.public || ''; setCode(curCode); }
   if (ev.qrUntil && ev.qrUntil > qrShownUntil) showQr(ev.qrUntil, curCode);
@@ -323,6 +329,7 @@ function setScreen(mode, v) {
   pre.src = url;
 }
 function setPin(pin, photo) {
+  modPin(pin, photo);
   if (!pin) { if (pinned) { pinned = null; if (!showingNew) next(); } return; }
   const p = loop.find((x) => x.id === pin.id) || photo;
   if (!p) return;
@@ -447,6 +454,7 @@ function addPhoto(p) {
   seen.add(p.id);
   loop.push(p);
   queue.push(p);
+  modAdd(p);
   lastNewAt = Date.now();
   bubbleUntil = 0;
   $('#bubble').classList.add('hidden');
@@ -455,6 +463,7 @@ function addPhoto(p) {
 function removePhoto(id) {
   if (pinned && pinned.p.id === id) { pinned = null; setTimeout(next, 0); }
   loop = loop.filter((p) => p.id !== id);
+  modRemove(id);
   queue = queue.filter((p) => p.id !== id);
   const cur = loopList[idx];
   rebuildLoop();
@@ -505,6 +514,7 @@ function connect() {
   es.addEventListener('remove', (e) => removePhoto(JSON.parse(e.data).id));
   es.addEventListener('settings', (e) => { const d = JSON.parse(e.data); settings = { ...settings, ...d.settings }; if (d.code && d.code !== curCode) { curCode = d.code; setCode(d.code); } rebuildLoop(); });
   es.addEventListener('screen', (e) => { const d = JSON.parse(e.data); window.__lastScreenEvent = d; setScreen(d.mode, d.v); });
+  es.addEventListener('module', (e) => setModule(JSON.parse(e.data).module));
   es.addEventListener('bubble', () => { settings.bubbleOn = true; showBubble(); });
   es.addEventListener('pin', (e) => { const d = JSON.parse(e.data); setPin(d.pin, d.photo); });
   es.addEventListener('qr', (e) => { const d = JSON.parse(e.data); showQr(d.until, d.code || curCode); });
@@ -541,6 +551,70 @@ document.addEventListener('mousemove', () => { document.body.classList.remove('i
 const orient = () => document.body.classList.toggle('portrait', innerHeight > innerWidth);
 addEventListener('resize', orient); orient();
 
+
+// ================= photo modules =================
+// "slides" is the built-in slideshow above. Every other module is a self-contained plugin file in
+// /modules/<id>.js that exports default create(ctx) -> { mount, refresh, add, remove, pin, destroy }.
+// Admins can upload their own plugins (ccam.my/admin/organizers -> Big screen). The selected module is
+// stored on the event, so it survives restarts and every screen for that event follows it.
+let activeModule = null, moduleId = 'slides', moduleSeq = 0;
+
+function injectModuleCoreCss() {
+  if (document.getElementById('mod-core-css')) return;
+  const st = document.createElement('style'); st.id = 'mod-core-css';
+  st.textContent = `
+    body:not([data-layout="slides"]) #main, body:not([data-layout="slides"]) #scatter, body:not([data-layout="slides"]) #empty { display: none; }
+    #modRoot { position:absolute; inset:0; z-index:3; overflow:hidden; }
+    #modRoot[hidden] { display:none; }
+    .mod-overlay { position:fixed; inset:0; z-index:14; display:none; background:rgba(3,5,6,.9); }
+    .mod-overlay.on { display:block; }
+    .mod-overlay img { position:fixed; display:block; object-fit:cover; box-shadow:0 4vw 12vw rgba(0,0,0,.7); will-change:left,top,width,height; }
+  `;
+  document.head.appendChild(st);
+}
+function modPhotos() { return loop.filter(fits); }
+function modRefill() { if (activeModule && activeModule.refresh) activeModule.refresh(); }
+function modAdd(p) { if (activeModule && activeModule.add) activeModule.add(p); }
+function modRemove(id) { if (activeModule && activeModule.remove) activeModule.remove(id); }
+function closeOverlay() {
+  const ov = $('#modOverlay'), im = $('#modOverlayImg');
+  if (!ov || !ov.classList.contains('on')) return;
+  ov.classList.remove('on');
+  if (im) im.style.transition = 'none';
+}
+const moduleCtx = {
+  photos: modPhotos, img: (p, size) => img(p, size), pick, R, reduce,
+  photoById: (id) => loop.find((p) => p.id === id),
+  closeOverlay, settings: () => settings,
+};
+async function setModule(id) {
+  id = String(id || 'slides').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (!id) id = 'slides';
+  if (activeModule) { try { activeModule.destroy && activeModule.destroy(); } catch { /* ignore */ } activeModule = null; }
+  moduleId = id;
+  const root = $('#modRoot');
+  closeOverlay();
+  document.body.dataset.layout = id === 'slides' ? 'slides' : 'module';
+  if (root) { root.hidden = id === 'slides'; root.innerHTML = ''; }
+  if (id === 'slides') return;
+  injectModuleCoreCss();
+  try {
+    const mod = await import(`/modules/${id}.js?v=${(moduleSeq += 1)}`);
+    if (moduleId !== id) return;
+    activeModule = mod.default(moduleCtx);
+    activeModule.mount(root);
+  } catch (e) {
+    console.error('big-screen module failed:', id, e);
+    window.__modErr = String(e && (e.stack || e.message || e));
+    activeModule = null; document.body.dataset.layout = 'slides'; if (root) root.hidden = true;
+  }
+}
+function modPin(pin, photo) {
+  if (!activeModule || !activeModule.pin) return;
+  if (!pin) { closeOverlay(); activeModule.pin(null); return; }
+  const p = loop.find((x) => x.id === pin.id) || photo;
+  activeModule.pin(pin, p);
+}
 boot().catch((e) => fail(`Could not start the big screen: ${e.message}`));
 </script>
 </body>

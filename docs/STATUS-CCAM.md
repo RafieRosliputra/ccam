@@ -92,3 +92,28 @@ with curl (above), and in a real browser through Access (organizer list returns 
    (`/mnt/ssd/client-1month/ccam` per the plan) needs a root-run mount script on m10.
 3. **Moderator**: verify photo moderation once real photos flow (container is running; first boot downloads models).
 4. Optional: give the Umami website a friendlier domain list if client-host analytics need filtering.
+
+## Big-screen modules (plugin system)
+
+The big screen now has **three photo modules** and is extensible:
+
+| Module | What it does |
+|---|---|
+| `slides` (built-in) | the original one-photo-at-a-time slideshow (Ken Burns, polaroid background) |
+| `carousel` | full-screen columns of photos scrolling upwards (alternating directions). A new photo flies in oversized from a random screen edge and drops into its tile; a pinned photo pauses the scroll and pops from its tile to full screen, then returns |
+| `cinema` | a huge hero photo with a slowly moving filmstrip underneath. A new photo flies into the strip and then takes over the hero; a pinned photo pops up full screen and returns to the strip |
+
+Modules are **plugin files**: `/modules/<id>.js`, each exporting
+`export default function create(ctx) { return { mount, refresh, add, remove, pin, destroy } }` where
+`ctx = { photos(), img(p,size), pick, R, reduce, photoById(id), closeOverlay, settings() }`.
+`server/public/modules/` holds the built-ins; **admins can upload their own** from
+`ccam.my/admin` → event → Big screen → **Upload module** (file name becomes the module id, max 200 KB).
+Uploaded files live in `DATA_DIR/modules/` and are served at `/modules/<id>.js`.
+
+- Panel: **Photo module** buttons (Slideshow / Carousel / Cinema / uploaded ones). The choice is stored on the
+  event (`settings.module`, survives restart) and published over SSE (`module`), so every screen for that event
+  switches. Uploaded modules are marked with `*`.
+- API: `GET /api/modules` (public list), `GET /modules/<id>.js`, `POST /api/admin/modules/upload`
+  (header `x-name`, body = JS), `DELETE /api/admin/modules/<id>`, `POST /api/{admin|client}/events/<id>/module`.
+- Security: uploads are admin-only (Cloudflare Access). A module is arbitrary JS executed on public screens,
+  so only upload modules you trust; the screen loads them as ES modules in its own origin.
