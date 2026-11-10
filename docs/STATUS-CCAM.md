@@ -20,6 +20,20 @@ Production is live on Cloudflare + m10. `live.johorstudio.com` is untouched (sta
 raw files redirect to the clean (Access-protected) URLs. A client host only ever serves its own events
 (gallery `/e/…`, code login `/auth/code`, QR `/c/…`, `/show`, `/d`, uploads, live-status, showcase, `/api/me`).
 
+## Big screen (public link)
+
+The big screen is a **public page**: `/show/<event id>` needs no login, so it can be dropped into OBS or opened on
+any laptop/tablet on the venue wifi. It reads `/api/screen/<id>` (+ `/photos`, `/stream`, `/bg/<which>`) which expose
+only the guest code, screen mode, pin, QR popup, backgrounds and visible photos — **never** the photographer or
+organiser codes. Images use the public `/p/<public token>/<photo>/<size>` route.
+
+Controls stay in the organiser panel(s): any signed-in organiser (`/panel`, client code) can switch photos/black/
+backgrounds, pin a photo, show the QR popup or the "Upload your photos!" message; the server publishes each change
+over SSE (`pub:<event id>`), so several organisers can drive the same screen and every open screen follows. The panel
+also has **Copy big-screen link** (client domain). Verified: public screen loaded with no cookie (code 544 955,
+`ANNUAL DINNER · Big screen`, footer `passion.ccam.my`), a panel POST set the screen to `black` and the open screen
+received `{mode:'black'}` over SSE, then reset to `photos`.
+
 ## Link rule (important)
 
 Every event link is built from the **owning client**, never from the host the page happens to be served on:
