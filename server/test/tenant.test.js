@@ -75,6 +75,8 @@ const asJson = (method, pathname, body, host = 'ccam.my') =>
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 7)]);
 
+const JPG_B64 = '/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAACKADAAQAAAABAAAACAAAAAD/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9sAQwACAgICAgIDAgIDBQMDAwUGBQUFBQYIBgYGBgYICggICAgICAoKCgoKCgoKDAwMDAwMDg4ODg4PDw8PDw8PDw8P/9sAQwECAgIEBAQHBAQHEAsJCxAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ/90ABAAB/9oADAMBAAIRAxEAPwD3z/h0f8AZ5DYPqnipYYm8szpPpQG1TwzHyPM6deM+1Wv+HOf7NX/Q1+J//Aqz/wDkSv1ih/5ff98/yqnV+0ZDR//Z';
+
 async function createOrg(over = {}) {
   const r = await asJson('POST', '/api/admin/organizers', { name: 'Passion Sound & Event', slug: 'passion', ...over });
   assert.equal(r.status, 201, r.text);
@@ -375,6 +377,28 @@ test('big screen is a public link: no login, no secret codes', async () => {
   assert.equal((await call('GET', `/api/screen/${id}`, { host: 'ccam.my' })).status, 200);
   assert.equal((await call('GET', `/api/screen/${id}`, { host: 'localhost' })).status, 200);
   assert.equal((await call('GET', '/api/screen/00000000-0000-0000-0000-000000000000')).status, 404);
+  await admin('DELETE', `/api/admin/events/${id}`);
+});
+
+test('admin uploads photos to a client event from ccam.my (regression)', async () => {
+  const org = (await admin('GET', '/api/admin/organizers')).json.organizers.find((o) => o.slug === 'passion');
+  const created = await asJson('POST', '/api/admin/events', { date: '20261110', title: 'Upload Check', organizerId: org.id });
+  const id = created.json.event.id;
+  const jpeg = Buffer.from(JPG_B64, 'base64');
+  const start = await admin('POST', `/api/admin/events/${id}/uploads`, {
+    body: JSON.stringify({ name: 'IMG_0001.jpg', size: jpeg.length, uploader: 'admin1' }),
+    headers: { 'content-type': 'application/json' },
+  });
+  assert.equal(start.status, 201, start.text);
+  const up = start.json;
+  const put = await call('PUT', `/api/uploads/${up.id}?offset=0`, { host: 'ccam.my', body: jpeg, headers: { 'content-type': 'application/octet-stream' } });
+  assert.equal(put.status, 200, put.text);
+  const done = await call('POST', `/api/uploads/${up.id}/complete`, { host: 'ccam.my' });
+  assert.equal(done.status, 200, done.text);
+  assert.ok(done.json.photo && done.json.photo.id);
+  // the client host serves it
+  const photos = await call('GET', `/api/screen/${id}/photos`, { host: 'passion.ccam.my' });
+  assert.equal(photos.json.photos.length, 1);
   await admin('DELETE', `/api/admin/events/${id}`);
 });
 

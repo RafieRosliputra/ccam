@@ -431,7 +431,11 @@ function uploadFor(id) {
   if (!up) fail(404, 'Upload not found or expired. Start again.');
   const ev = db.getEvent(up.event_id);
   if (!ev) { db.deleteUpload(id); fail(410, 'The event was deleted'); }
-  if (!eventVisibleOnHost(ev, currentReq())) fail(404, 'Upload not found or expired. Start again.');
+  // Upload ids are secret and created by an authenticated staff member. Only block when the upload is
+  // resumed from a *client* host that doesn't own the event; the admin host may finish uploads for any
+  // client's event (ccam.my/admin uploading photos for passion.ccam.my / sarwa.ccam.my, etc.).
+  const t = hostTenant(currentReq());
+  if (t && t.kind === 'tenant' && !eventVisibleOnHost(ev, currentReq())) fail(404, 'Upload not found or expired. Start again.');
   return { up, ev };
 }
 r('GET', '/api/uploads/:id', (req, res, { params }) => {
