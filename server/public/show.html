@@ -363,6 +363,7 @@ async function showPinned() {
     const old = cur;
     const f = makeFrame(p, src);
     cur = f;
+    showPhotoTag(p);
     kenBurns(f, until ? until - Date.now() + 1500 : 40000, { faces: true });
     f.el.animate(pick(IN)(), { duration: reduce ? 400 : 1300, easing: 'ease-in-out' });
     leave(old);
@@ -377,7 +378,7 @@ async function next() {
   if (pinned && pinned.until && pinned.until <= Date.now()) pinned = null;
   if (pinned) return showPinned();
   if (queue.length) return showNew();
-  if (!loopList.length) { leave(cur); cur = null; loopTimer = setTimeout(next, 2000); return; }
+  if (!loopList.length) { leave(cur); cur = null; clearPhotoTag(); loopTimer = setTimeout(next, 2000); return; }
   if (!pols.some((el) => el.classList.contains('has'))) fillScatter();
   idx = (idx + 1) % loopList.length;
   const p = loopList[idx];
@@ -388,6 +389,7 @@ async function next() {
   const old = cur;
   const f = makeFrame(p, src);
   cur = f;
+  showPhotoTag(p);
   const hold = settings.loopSec * 1000;
   kenBurns(f, hold + 2600);
   f.el.animate(pick(IN)(), { duration: reduce ? 400 : 1300, easing: 'ease-in-out' });
@@ -395,11 +397,27 @@ async function next() {
   loopTimer = setTimeout(next, hold);
 }
 
+let slideTag = null;
+function clearPhotoTag() { if (slideTag) { slideTag.remove(); slideTag = null; } }
+function showPhotoTag(p) {
+  clearPhotoTag();
+  if (!p) return;
+  const el = document.createElement('div');
+  el.className = 'tag';
+  el.setAttribute('data-brand-lock', '1');
+  el.textContent = p.by ? `by ${p.by}` : 'a guest';
+  $('#stage').appendChild(el);
+  const foot = document.getElementById('foot');
+  if (foot) el.style.bottom = (innerHeight - foot.getBoundingClientRect().top + 5) + 'px';
+  slideTag = el;
+}
+
 async function showNew() {
   clearTimeout(loopTimer);
   ++gen;
   const p = queue.shift();
   showingNew = true;
+  clearPhotoTag();
   $('#empty').classList.add('hidden');
   const src = img(p);
   const [im] = await Promise.all([loadImg(src), waitFaces(p, 1200)]);
@@ -616,6 +634,7 @@ async function setModule(id) {
   closeOverlay();
   document.body.dataset.layout = id === 'slides' ? 'slides' : 'module';
   if (root) { root.hidden = id === 'slides'; root.innerHTML = ''; }
+  clearPhotoTag();
   if (id === 'slides') return;
   injectModuleCoreCss();
   try {
