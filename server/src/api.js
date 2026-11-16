@@ -22,6 +22,8 @@ import { Router, HttpError, fail, sendJson, readJson, readBody, clientIp, random
 import { publicBase, currentReq, currentTenant } from './request.js';
 import * as tenant from './tenant.js';
 import { extractBrand, fetchImage } from './brandimport.js';
+import { registerViewer } from './ppv/viewer.js';
+import { registerAdmin } from './ppv/admin.js';
 
 export const router = new Router();
 const r = (m, p, h) => router.add(m, p, h);
@@ -1217,3 +1219,6 @@ A('DELETE', '/modules/:name', (req, res, { params }) => {
   sendJson(res, 200, { modules: moduleList() });
 });
 
+// pay-per-view (ppv): viewer API + admin API
+registerViewer(r);
+registerAdmin(r);
