@@ -27,6 +27,7 @@ window.login = () => new Promise((ok, no) => {
   const msg = (t) => { const e = $('#lgMsg'); e.textContent = t || ''; e.style.display = t ? '' : 'none'; };
   let step = 1; msg(''); m.classList.add('on'); $('#lgEmail').focus();
   $('#lgCancel').onclick = () => { m.classList.remove('on'); no(new Error('cancel')); };
+  m.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#lgGo').click(); } };
   $('#lgGo').onclick = async () => {
     const email = $('#lgEmail').value.trim();
     $('#lgGo').disabled = true; msg('');
