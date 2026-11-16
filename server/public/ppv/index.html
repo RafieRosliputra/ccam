@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ccam ppv - Tonton siaran langsung</title><meta name="description" content="Tiket siaran langsung: tinju, seminar, senaman. Tonton dari mana-mana peranti.">
+<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/ppv/ppv.css"></head>
+<body>
+<main class="wrap">
+  <section class="hero"><h1>Siaran langsung,<br>tiket digital.</h1><p>Beli tiket, log masuk dengan emel, tonton dari telefon atau TV. Ulang tayang 7 hari.</p></section>
+  <div class="chips" id="chips"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">Belum ada acara. Datang semula nanti.</div>
+</main>
+<footer><div class="wrap">ccam ppv · Johor Studio</div></footer>
+<script src="/ppv/ppv.js"></script>
+<script>
+let all = [], cat = 'all';
+function draw() {
+  const list = all.filter((e) => cat === 'all' || e.category === cat);
+  $('#empty').style.display = list.length ? 'none' : '';
+  $('#grid').innerHTML = list.map((e) => `<a class="card" data-cat="${esc(e.category)}" href="/ppv/e/${esc(e.slug)}">
+    <div class="poster" style="${e.poster ? `background-image:url('${esc(e.poster)}')` : ''}"><span class="tag">${esc(CATS[e.category] || e.category)}</span>${e.status === 'live' ? '<span class="tag live">LIVE</span>' : ''}</div>
+    <div class="bd"><h3>${esc(e.title)}</h3><div class="meta">${e.status === 'ended' ? 'Ulang tayang' : when(e.startsAt)}</div>
+    <div class="price"><strong>${rm(e.priceCents)}</strong><span class="btn" style="padding:8px 14px;min-height:36px">${e.status === 'live' ? 'Tonton' : 'Lihat'}</span></div></div></a>`).join('');
+}
+(async () => {
+  await topbar();
+  const { events } = await api('GET', '/api/ppv/events');
+  all = events;
+  const cats = ['all', ...new Set(events.map((e) => e.category))];
+  $('#chips').innerHTML = cats.map((c) => `<button class="chip ${c === cat ? 'on' : ''}" data-c="${c}">${c === 'all' ? 'Semua' : esc(CATS[c] || c)}</button>`).join('');
+  $('#chips').onclick = (ev) => { const b = ev.target.closest('.chip'); if (!b) return; cat = b.dataset.c; document.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === b)); draw(); };
+  draw();
+})();
+</script></body></html>

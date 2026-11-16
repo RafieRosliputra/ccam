@@ -143,3 +143,11 @@ test('money split: gross minus gateway fee, then shares', async () => {
   assert.equal(set.body.plan.shares.reduce((a, s) => a + s.cents, 0), 1450);
   assert.equal((await admin('PUT', `/api/admin/ppv/events/${ev.id}/splits`, { shares: [{ party: 'x', pct: 50 }] })).status, 400);
 });
+
+test('ppv pages are served with clean URLs and assets', async () => {
+  for (const u of ['/ppv', '/ppv/e/boxing-night', '/ppv/watch/boxing-night', '/ppv/org', '/ppv/ppv.css', '/ppv/ppv.js', '/ppv/vendor/hls.min.js']) {
+    const r = await fetch(base + u);
+    assert.equal(r.status, 200, u);
+  }
+  assert.match(await (await fetch(base + '/ppv')).text(), /ccam ppv/);
+});

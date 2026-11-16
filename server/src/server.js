@@ -25,6 +25,11 @@ const PAGES = [
   [/^\/c\/\d{6}\/?$/, 'index.html'],        // QR on the big screen: code filled in
   [/^\/join\/\d{6}\/?$/, 'join.html'],      // photographer link: opens the JS Tether app with the code
   [/^\/admin\/?$/, 'admin.html'],
+  [/^\/ppv\/?$/, 'ppv/index.html'],                   // pay-per-view: events list
+  [/^\/ppv\/e\/[a-z0-9-]{2,63}\/?$/, 'ppv/event.html'],
+  [/^\/ppv\/watch\/[a-z0-9-]{2,63}\/?$/, 'ppv/watch.html'],
+  [/^\/ppv\/org\/?$/, 'ppv/admin.html'],              // pay-per-view: organisation staff (email login)
+  [/^\/admin\/ppv\/?$/, 'ppv/admin.html'],             // pay-per-view: platform admin, behind Cloudflare Access
   [/^\/panel\/?$/, 'admin.html'],              // organiser panel (client code), same page, fewer powers
   [/^\/admin\/organizers\/?$/, 'organizers.html'],   // admin: white-label event organisers (ccam.my tenants), behind Cloudflare Access
   [/^\/livescreen\/?$/, 'livescreen.html'],           // enter-event-code page + events live now (platform and client hosts)

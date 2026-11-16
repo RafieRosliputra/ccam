@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Acara - ccam ppv</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/ppv/ppv.css"></head>
+<body>
+<main class="wrap"><div class="ev" id="ev"></div></main>
+<footer><div class="wrap">ccam ppv · Johor Studio</div></footer>
+<script src="/ppv/ppv.js"></script>
+<script>
+const slug = location.pathname.split('/').filter(Boolean).pop();
+let user, data;
+async function load() {
+  try { data = await api('GET', '/api/ppv/events/' + encodeURIComponent(slug)); } catch (e) { $('#ev').innerHTML = `<div class="empty" style="grid-column:1/-1">Acara tidak dijumpai.</div>`; return; }
+  const e = data.event, t = data.ticket, w = data.watch;
+  document.title = e.title + ' - ccam ppv'; document.body.dataset.cat = e.category;
+  const soldOut = e.ticketsLeft === 0;
+  let action = '';
+  if (t) action = w.ok ? `<a class="btn" style="width:100%" href="/ppv/watch/${esc(e.slug)}">${w.mode === 'replay' ? 'Tonton ulang tayang' : 'Tonton sekarang'}</a>` : `<button class="btn" style="width:100%" disabled>${w.reason === 'not_started' ? 'Tiket anda sah. Belum bermula' : w.reason === 'replay_over' ? 'Ulang tayang tamat' : 'Tidak tersedia'}</button>`;
+  else if (e.status === 'ended' || e.status === 'cancelled') action = `<button class="btn" style="width:100%" disabled>${e.status === 'cancelled' ? 'Dibatalkan' : 'Acara tamat'}</button>`;
+  else if (soldOut) action = `<button class="btn" style="width:100%" disabled>Habis dijual</button>`;
+  else action = `<button class="btn" id="buy" style="width:100%">${e.whitelist ? 'Tuntut tiket (senarai tetamu)' : e.yourPriceCents ? 'Beli tiket · ' + rm(e.yourPriceCents) : 'Dapatkan tiket percuma'}</button>`;
+  $('#ev').innerHTML = `<div><div class="poster" style="${e.poster ? `background-image:url('${esc(e.poster)}')` : ''}"><span class="tag">${esc(CATS[e.category] || e.category)}</span>${e.status === 'live' ? '<span class="tag live">LIVE</span>' : ''}</div>
+    <h1 style="margin:22px 0 6px;font-size:clamp(26px,4vw,40px);letter-spacing:-.02em">${esc(e.title)}</h1><div class="meta">${when(e.startsAt)}</div>
+    <p style="white-space:pre-line;color:#c7d3e0">${esc(e.description)}</p></div>
+  <aside class="panel"><h2>Tiket</h2>
+    ${e.discountPct ? `<div class="meta"><s>${rm(e.priceCents)}</s> · diskaun ${e.discountPct}%</div>` : ''}
+    <div class="big">${e.whitelist ? 'Jemputan' : rm(e.yourPriceCents)}</div>
+    ${e.ticketsLeft != null ? `<div class="meta">${e.ticketsLeft} tiket tinggal</div>` : ''}
+    <div style="margin-top:16px">${action}</div><div id="out"></div>
+    <div class="note">1 tiket = 1 peranti pada satu masa. Ulang tayang ${e.replayDays} hari selepas acara. Jangan kongsi akaun: kod pengenalan anda terpapar pada skrin.</div></aside>`;
+  $('#buy')?.addEventListener('click', buy);
+}
+async function buy() {
+  const out = $('#out'); out.innerHTML = '';
+  try {
+    if (!user.email) { await login(); user = await me(); }
+    const r = await api('POST', `/api/ppv/events/${encodeURIComponent(slug)}/checkout`);
+    if (r.ticket) return location.reload();
+    const p = r.payment;
+    out.innerHTML = `<div class="msg">Pesanan dibuat. Jumlah <b>${rm(p.amountCents)}</b>.<br>ID bayaran: <b>${esc(p.id.slice(0, 8))}</b><br>${esc(p.note)}</div>`;
+  } catch (e) { if (e.message !== 'cancel') out.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+}
+(async () => { user = await topbar(); load(); })();
+</script></body></html>

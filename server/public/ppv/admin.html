@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin ppv</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/ppv/ppv.css"></head>
+<body>
+<header class="top"><div class="wrap"><a class="logo" href="/ppv">ccam<b>ppv</b></a><span class="meta">Admin</span><span class="sp"></span><span class="meta" id="who"></span></div></header>
+<main class="wrap">
+  <div class="tabs" id="tabs"></div>
+  <div id="view"></div>
+</main>
+<script src="/ppv/ppv.js"></script>
+<script>
+// Mode: platform admin (/admin/ppv, behind Cloudflare Access) or organisation staff (/ppv/org, email login)
+const ORG = location.pathname.startsWith('/ppv/org');
+const A = ORG ? '/api/ppv/org' : '/api/admin/ppv';
+const TABS = ORG ? ['events'] : ['events', 'payments', 'leak', 'orgs'];
+const NAMES = { events: 'Acara', payments: 'Bayaran', leak: 'Cari kod', orgs: 'Organisasi' };
+let tab = 'events', events = [];
+const v = $('#view');
+const msg = (t, bad) => `<div class="msg ${bad ? 'err' : ''}">${esc(t)}</div>`;
+const go = (t) => { tab = t; $('#tabs').innerHTML = TABS.map((x) => `<button class="chip ${x === tab ? 'on' : ''}" data-t="${x}">${NAMES[x]}</button>`).join(''); render(); };
+$('#tabs').onclick = (e) => { const b = e.target.closest('.chip'); if (b) go(b.dataset.t); };
+const dt = (ms) => (ms ? new Date(ms - new Date(ms).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '');
+const fromDt = (s) => (s ? new Date(s).getTime() : null);
+async function guard(fn) { try { return await fn(); } catch (e) { if (e.message !== 'cancel') v.insertAdjacentHTML('afterbegin', msg(e.message, true)); } }
+
+async function render() {
+  if (tab === 'events') return renderEvents();
+  if (tab === 'payments') return renderPayments();
+  if (tab === 'leak') return renderLeak();
+  if (tab === 'orgs') return renderOrgs();
+}
+async function renderEvents() {
+  events = (await api('GET', A + '/events')).events;
+  v.innerHTML = `<div class="row" style="margin-bottom:16px"><div class="stat"><b>${events.length}</b>Acara</div><div class="stat"><b>${events.reduce((a, e) => a + e.sold, 0)}</b>Tiket</div><div class="stat"><b>${events.reduce((a, e) => a + e.live, 0)}</b>Menonton sekarang</div></div>
+  <button class="btn" id="new">+ Acara baru</button>
+  <table class="tbl" style="margin-top:16px"><tr><th>Acara</th><th>Status</th><th>Harga</th><th>Tiket</th><th>Live</th><th></th></tr>
+  ${events.map((e) => `<tr><td><b>${esc(e.title)}</b><div class="meta">/${esc(e.slug)} · ${when(e.startsAt)}</div></td><td>${esc(e.status)}</td><td>${rm(e.priceCents)}</td><td>${e.sold}</td><td>${e.live}</td>
+  <td style="white-space:nowrap"><button class="btn ghost" data-ed="${e.id}">Urus</button></td></tr>`).join('')}</table>`;
+  $('#new').onclick = () => form({});
+  v.querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => manage(events.find((x) => x.id === b.dataset.ed))));
+}
+function form(e) {
+  const isNew = !e.id;
+  v.innerHTML = `<h2>${isNew ? 'Acara baru' : 'Sunting ' + esc(e.title)}</h2><div class="row">
+  <div><label>Tajuk</label><input id="f_title" value="${esc(e.title)}"></div><div><label>Slug (URL)</label><input id="f_slug" value="${esc(e.slug)}" placeholder="tinju-malam-ini"></div>
+  <div><label>Kategori</label><select id="f_cat">${Object.entries(CATS).map(([k, n]) => `<option value="${k}" ${e.category === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+  <div><label>Mula</label><input id="f_start" type="datetime-local" value="${dt(e.startsAt)}"></div><div><label>Tamat</label><input id="f_end" type="datetime-local" value="${dt(e.endsAt)}"></div>
+  <div><label>Harga (RM, min 5; 0 jika jemputan)</label><input id="f_price" type="number" step="0.5" value="${(e.priceCents || 0) / 100}"></div>
+  <div><label>Had tiket (0 = tiada)</label><input id="f_limit" type="number" value="${e.ticketLimit || 0}"></div>
+  <div><label>Senarai tetamu sahaja</label><select id="f_wl"><option value="0">Tidak</option><option value="1" ${e.whitelist ? 'selected' : ''}>Ya</option></select></div>
+  <div><label>Sumber siaran</label><select id="f_prov"><option value="hls">HLS (MediaMTX)</option><option value="cfstream" ${e.provider === 'cfstream' ? 'selected' : ''}>Cloudflare Stream</option></select></div>
+  <div><label>URL HLS / UID Stream</label><input id="f_ref" value="${esc(e.providerRef)}"></div>
+  <div><label>Poster (URL)</label><input id="f_poster" value="${esc(e.poster)}"></div><div><label>Imej menunggu (URL)</label><input id="f_wait" value="${esc(e.waitingImage)}"></div>
+  <div><label>Teks ticker</label><input id="f_tick" value="${esc(e.tickerText)}"></div></div>
+  <label>Penerangan</label><textarea id="f_desc" rows="4">${esc(e.description)}</textarea>
+  <div style="display:flex;gap:8px;margin-top:16px"><button class="btn ghost" id="cancel">Batal</button><button class="btn" id="save">Simpan</button></div>`;
+  $('#cancel').onclick = renderEvents;
+  $('#save').onclick = () => guard(async () => {
+    const b = { title: $('#f_title').value, slug: $('#f_slug').value, category: $('#f_cat').value, starts_at: fromDt($('#f_start').value), ends_at: fromDt($('#f_end').value) ?? undefined,
+      price_cents: Math.round(parseFloat($('#f_price').value || 0) * 100), ticket_limit: +$('#f_limit').value, whitelist: $('#f_wl').value === '1', provider: $('#f_prov').value,
+      provider_ref: $('#f_ref').value, poster: $('#f_poster').value, waiting_image: $('#f_wait').value, ticker_text: $('#f_tick').value, description: $('#f_desc').value };
+    if (b.ends_at === undefined) delete b.ends_at;
+    await api(isNew ? 'POST' : 'PATCH', A + '/events' + (isNew ? '' : '/' + e.id), b); renderEvents();
+  });
+}
+async function manage(e) {
+  const t = (await api('GET', `${A}/events/${e.id}/tickets`).catch(() => ({ tickets: null }))).tickets;
+  const canMoney = !ORG || true;
+  v.innerHTML = `<button class="btn ghost" id="back">← Kembali</button><h2>${esc(e.title)} <span class="meta">${esc(e.status)}</span></h2>
+  <div class="bar"><button class="btn" data-st="live">Mula siaran (LIVE)</button><button class="btn ghost" data-st="ended">Tamat siaran</button><button class="btn ghost" data-st="scheduled">Jadual</button>
+  ${ORG ? '' : '<button class="btn bad" data-st="cancelled">Batal acara</button>'}<button class="btn ghost" id="edit">Sunting</button><a class="btn ghost" href="/ppv/e/${esc(e.slug)}" target="_blank">Halaman awam</a></div>
+  <div class="row" style="align-items:end"><div><label>Ticker (kod penonton ditambah automatik)</label><input id="tk" value="${esc(e.tickerText)}"></div><div><button class="btn ghost" id="tkS">Simpan ticker</button></div></div>
+  <div id="box"></div>
+  ${t ? `<h3>Tiket (${t.length})</h3><table class="tbl"><tr><th>Emel</th><th>Sumber</th><th>Status</th><th></th></tr>${t.map((x) => `<tr><td>${esc(x.email)}</td><td>${esc(x.source)}</td><td>${esc(x.status)}</td>
+  <td>${ORG ? '' : x.status === 'active' ? `<button class="btn bad" data-rv="${x.id}">Batal</button>` : `<button class="btn ghost" data-ri="${x.id}">Aktif semula</button>`}</td></tr>`).join('')}</table>
+  <h3>Senarai tetamu</h3><textarea id="wl" rows="3" placeholder="emel dipisah koma atau baris baru"></textarea><button class="btn ghost" id="wlS" style="margin-top:8px">Tambah</button>` : ''}
+  ${ORG || !t ? '' : `<h3>Pembahagian hasil</h3><div id="money"></div><h3>Diskaun acara seterusnya</h3><div class="row" style="align-items:end"><div><label>Peratus</label><input id="dpct" type="number" value="20"></div><div><label>Sah (hari)</label><input id="dday" type="number" value="30"></div><div><button class="btn ghost" id="dgo">Beri kepada pemegang tiket</button></div></div>`}`;
+  $('#back').onclick = renderEvents; $('#edit').onclick = () => form(e);
+  v.querySelectorAll('[data-st]').forEach((b) => (b.onclick = () => guard(async () => { if (b.dataset.st === 'cancelled') { if (!confirm('Batal acara? Tiket perlu dikembalikan wang secara manual.')) return; await api('PATCH', `${A}/events/${e.id}`, { status: 'cancelled' }); } else await api('POST', `${A}/events/${e.id}/ops`, { status: b.dataset.st }); manage((await api('GET', A + '/events')).events.find((x) => x.id === e.id)); })));
+  $('#tkS').onclick = () => guard(async () => { await api('POST', `${A}/events/${e.id}/ops`, { ticker_text: $('#tk').value }); $('#box').innerHTML = msg('Ticker disimpan'); });
+  v.querySelectorAll('[data-rv]').forEach((b) => (b.onclick = () => confirm('Batal tiket ini?') && guard(async () => { await api('POST', `/api/admin/ppv/tickets/${b.dataset.rv}/revoke`); manage(e); })));
+  v.querySelectorAll('[data-ri]').forEach((b) => (b.onclick = () => guard(async () => { await api('POST', `/api/admin/ppv/tickets/${b.dataset.ri}/reinstate`); manage(e); })));
+  $('#wlS')?.addEventListener('click', () => guard(async () => { const r = await api('POST', `${A}/events/${e.id}/whitelist`, { emails: $('#wl').value }); $('#box').innerHTML = msg(`${r.added} ditambah, jumlah ${r.total}`); }));
+  $('#dgo')?.addEventListener('click', () => guard(async () => { await api('POST', `/api/admin/ppv/events/${e.id}/discount`, { pct: +$('#dpct').value, days: +$('#dday').value }); $('#box').innerHTML = msg('Diskaun diberi'); }));
+  if (!ORG && t) moneyView(e);
+}
+async function moneyView(e) {
+  const m = await api('GET', `${A}/events/${e.id}/money`); const el = $('#money');
+  const sp = m.splits.length ? m.splits : [{ party: 'platform', pct: 0 }];
+  el.innerHTML = `<div class="row"><div class="stat"><b>${rm(m.gross)}</b>Jualan kasar (${m.sold})</div><div class="stat"><b>${rm(m.fee)}</b>Yuran gateway</div><div class="stat"><b>${rm(m.gross - m.fee)}</b>Bersih</div></div>
+  <table class="tbl"><tr><th>Pihak (platform / ID organisasi)</th><th>%</th></tr>${sp.map((s) => `<tr><td><input class="sp_p" value="${esc(s.party)}"></td><td><input class="sp_c" type="number" value="${s.pct}"></td></tr>`).join('')}</table>
+  <button class="btn ghost" id="spAdd">+ Pihak</button> <button class="btn" id="spSave">Simpan peratusan</button> <button class="btn ghost" id="spSet">Kira bayaran</button>
+  <table class="tbl">${m.settlements.map((s) => `<tr><td>${esc(s.party)}</td><td>${rm(s.cents)}</td><td>${s.paid_at ? 'Dibayar' : `<button class="btn ghost" data-sp="${s.id}">Tanda dibayar</button>`}</td></tr>`).join('')}</table>`;
+  $('#spAdd').onclick = () => { el.querySelector('table').insertAdjacentHTML('beforeend', '<tr><td><input class="sp_p"></td><td><input class="sp_c" type="number" value="0"></td></tr>'); };
+  $('#spSave').onclick = () => guard(async () => { const P = [...el.querySelectorAll('.sp_p')], C = [...el.querySelectorAll('.sp_c')]; await api('PUT', `${A}/events/${e.id}/splits`, { shares: P.map((p, i) => ({ party: p.value, pct: +C[i].value })).filter((s) => s.party) }); moneyView(e); });
+  $('#spSet').onclick = () => guard(async () => { await api('POST', `${A}/events/${e.id}/settle`); moneyView(e); });
+  el.querySelectorAll('[data-sp]').forEach((b) => (b.onclick = () => guard(async () => { await api('POST', `${A}/settlements/${b.dataset.sp}/paid`, { ref: prompt('Rujukan bayaran (pilihan)') || '' }); moneyView(e); })));
+}
+async function renderPayments() {
+  events = (await api('GET', A + '/events')).events;
+  const rows = [];
+  for (const e of events) for (const p of (await api('GET', `${A}/events/${e.id}/payments`)).payments) rows.push({ e, p });
+  v.innerHTML = `<h2>Bayaran</h2><table class="tbl"><tr><th>Acara</th><th>Emel</th><th>Jumlah</th><th>Status</th><th></th></tr>${rows.map(({ e, p }) => `<tr><td>${esc(e.title)}</td><td>${esc(p.email)}</td><td>${rm(p.gross_cents)}</td><td>${esc(p.status)}<div class="meta">${esc(p.id.slice(0, 8))}</div></td>
+  <td>${p.status === 'pending' ? `<button class="btn" data-pay="${p.id}">Tanda lunas</button>` : ''}</td></tr>`).join('') || '<tr><td colspan=5 class="meta">Tiada bayaran</td></tr>'}</table>`;
+  v.querySelectorAll('[data-pay]').forEach((b) => (b.onclick = () => guard(async () => { await api('POST', `${A}/payments/${b.dataset.pay}/paid`, { feeCents: 0 }); renderPayments(); })));
+}
+function renderLeak() {
+  v.innerHTML = `<h2>Cari kod pada siaran bocor</h2><p class="meta">Masukkan 6 aksara yang kelihatan pada rakaman bocor.</p><div style="display:flex;gap:8px;max-width:420px"><input id="lk" maxlength="6" class="otp" style="letter-spacing:.3em;text-transform:uppercase"><button class="btn" id="lkGo">Cari</button></div><div id="lkOut"></div>`;
+  $('#lkGo').onclick = () => guard(async () => {
+    const r = await api('GET', `${A}/leak/${encodeURIComponent($('#lk').value)}`);
+    $('#lkOut').innerHTML = r.matches.length ? `<table class="tbl"><tr><th>Emel</th><th>Acara</th><th>Masa</th><th>Tiket</th><th></th></tr>${r.matches.map((m) => `<tr><td>${esc(m.email)}</td><td>${esc(m.event)}</td><td>${new Date(m.at).toLocaleString('ms-MY')}</td><td>${esc(m.ticketStatus)}</td>
+    <td>${m.ticketStatus === 'active' ? `<button class="btn bad" data-rv="${m.ticketId}">Batal tiket</button>` : ''}</td></tr>`).join('')}</table>` : msg('Tiada padanan');
+    $('#lkOut').querySelectorAll('[data-rv]').forEach((b) => (b.onclick = () => confirm('Batal tiket ini?') && guard(async () => { await api('POST', `${A}/tickets/${b.dataset.rv}/revoke`); $('#lkGo').click(); })));
+  });
+}
+async function renderOrgs() {
+  const { orgs } = await api('GET', A + '/orgs');
+  v.innerHTML = `<h2>Organisasi</h2><table class="tbl"><tr><th>ID</th><th>Nama</th><th>Jenis</th><th>Ahli</th></tr>${orgs.map((o) => `<tr><td>${esc(o.organizer_id || '(platform)')}</td><td>${esc(o.name)}</td><td>${esc(o.kind)}</td><td>${o.members.map((m) => esc(m.email) + ' (' + m.role + ')').join('<br>')}</td></tr>`).join('')}</table>
+  <h3>Tambah / kemas kini</h3><div class="row"><div><label>ID (organizer_id)</label><input id="o_id"></div><div><label>Nama</label><input id="o_name"></div><div><label>Jenis</label><select id="o_kind"><option>client</option><option>provider</option><option>platform</option></select></div>
+  <div><label>Yuran tetap (RM)</label><input id="o_fx" type="number" value="0"></div><div><label>Yuran %</label><input id="o_pc" type="number" value="0"></div></div><button class="btn" id="o_save" style="margin-top:12px">Simpan organisasi</button>
+  <h3>Tambah ahli</h3><div class="row"><div><label>ID organisasi</label><input id="m_org"></div><div><label>Emel</label><input id="m_em" type="email"></div><div><label>Peranan</label><select id="m_role"><option value="admin">admin</option><option value="director">director (siaran sahaja)</option></select></div></div><button class="btn" id="m_save" style="margin-top:12px">Tambah ahli</button>`;
+  $('#o_save').onclick = () => guard(async () => { await api('PUT', `${A}/orgs/${$('#o_id').value || '_platform'}`, { name: $('#o_name').value, kind: $('#o_kind').value, feeFixed: Math.round($('#o_fx').value * 100), feePct: +$('#o_pc').value }); renderOrgs(); });
+  $('#m_save').onclick = () => guard(async () => { await api('PUT', `${A}/orgs/${$('#m_org').value || '_platform'}/members`, { email: $('#m_em').value, role: $('#m_role').value }); renderOrgs(); });
+}
+(async () => {
+  if (ORG) { const u = await me(); if (!u.email) { try { await login(); } catch { return; } } $('#who').textContent = (await me()).email || ''; }
+  go('events');
+})();
+</script></body></html>

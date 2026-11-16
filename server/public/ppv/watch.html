@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tonton - ccam ppv</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/ppv/ppv.css"></head>
+<body>
+<div class="stage" id="stage">
+  <video id="v" playsinline controls autoplay></video>
+  <div class="code" id="box"></div>
+  <div class="ticker" id="tick"><span id="tickTxt"></span></div>
+  <div class="wait" id="wait"><h2 id="wt">Memuatkan...</h2><p id="wp"></p><div id="wa"></div></div>
+</div>
+<main class="wrap"><div class="bar"><h2 id="title" style="margin:0;font-size:20px"></h2><span class="sp"></span><span class="meta" id="state"></span><a class="btn ghost" href="/ppv">Semua acara</a></div></main>
+<script src="/ppv/vendor/hls.min.js"></script>
+<script src="/ppv/ppv.js"></script>
+<script>
+const slug = location.pathname.split('/').filter(Boolean).pop();
+let S = null, hls, acks = [], timers = [], hb, token, cur;
+const v = $('#v');
+function stop(title, msg, btn) {
+  clearInterval(hb); timers.forEach(clearTimeout); try { hls?.destroy(); } catch {} v.pause(); $('#box').style.display = 'none'; $('#tick').style.display = 'none';
+  $('#wait').style.display = ''; $('#wt').textContent = title; $('#wp').textContent = msg || ''; $('#wa').innerHTML = btn || '';
+}
+function showBox(it) {
+  const b = $('#box'), delay = Math.max(0, it.at - Date.now());
+  timers.push(setTimeout(() => {
+    b.textContent = it.code; b.style.left = (it.x * 100) + '%'; b.style.top = (it.y * 100) + '%'; b.style.display = 'block';
+    timers.push(setTimeout(() => { b.style.display = 'none'; acks.push(it.id); }, it.ms));
+  }, delay));
+}
+function setTicker(t) {
+  if (!t) return $('#tick').style.display = 'none';
+  const el = $('#tickTxt'); if (el.dataset.t === t.text) return;
+  el.dataset.t = t.text; el.textContent = (t.text + '      ').repeat(6); $('#tick').style.display = 'block';
+}
+function apply(r) {
+  token = r.token; cur = r.url;
+  (r.schedule || []).forEach(showBox); setTicker(r.ticker);
+}
+function playUrl(url) {
+  if (hls) hls.destroy();
+  if (window.Hls && Hls.isSupported()) {
+    hls = new Hls({ lowLatencyMode: true, liveSyncDuration: 3, xhrSetup: (x, u) => { x.open('GET', u.replace(/([?&]pt=)[^&]*/, '$1' + encodeURIComponent(token))); } });
+    hls.loadSource(url); hls.attachMedia(v);
+    hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) { if (d.type === Hls.ErrorTypes.NETWORK_ERROR) setTimeout(() => hls.startLoad(), 2000); else hls.recoverMediaError(); } });
+  } else v.src = url;   // Safari plays HLS natively
+  v.play().catch(() => {});
+}
+async function beat() {
+  try {
+    const r = await api('POST', `/api/ppv/watch/${slug}/heartbeat`, { token, acks: acks.splice(0) });
+    const changed = r.url.split('?')[0] !== cur.split('?')[0];
+    apply(r); if (changed) playUrl(r.url);
+  } catch (e) {
+    const why = e.data?.reason;
+    if (e.status === 409 && why !== 'not_started') stop('Dihentikan', 'Anda mula menonton di peranti lain.', '<button class="btn" onclick="location.reload()">Tonton di sini</button>');
+    else if (e.status === 403 && why === 'overlay_missing') stop('Dihentikan', 'Kod pengenalan tidak kelihatan. Muat semula dan jangan sembunyikan skrin.', '<button class="btn" onclick="location.reload()">Cuba lagi</button>');
+    else if (e.status === 403) stop('Tiket dibatalkan', 'Hubungi penganjur.');
+    else if (e.status === 401) stop('Sesi tamat', 'Log masuk semula.', '<button class="btn" onclick="login().then(()=>location.reload())">Log masuk</button>');
+    // network error: keep playing; the token has a 60 s grace
+  }
+}
+async function start() {
+  const u = await topbar();
+  if (!u.email) { stop('Log masuk dahulu', 'Gunakan emel yang sama dengan tiket anda.', '<button class="btn" id="g">Log masuk</button>'); $('#g').onclick = async () => { try { await login(); location.reload(); } catch {} }; return; }
+  try {
+    const ev = await api('GET', '/api/ppv/events/' + encodeURIComponent(slug)); $('#title').textContent = ev.event.title; document.title = ev.event.title; document.body.dataset.cat = ev.event.category;
+    if (ev.event.waitingImage) $('#wait').style.background = `center/cover url('${ev.event.waitingImage}')`;
+    const r = await api('POST', `/api/ppv/watch/${slug}/start`, { hint: String(screen.width) + 'x' + String(screen.height) });
+    apply(r); $('#wait').style.display = 'none'; $('#state').textContent = r.mode === 'replay' ? 'Ulang tayang' : 'LIVE';
+    playUrl(r.url); hb = setInterval(beat, (r.heartbeatSec || 20) * 1000);
+  } catch (e) {
+    const why = e.data?.reason;
+    if (why === 'not_started') stop('Belum bermula', 'Halaman ini akan dibuka sendiri apabila siaran bermula.'), setTimeout(() => location.reload(), 30000);
+    else if (why === 'replay_over') stop('Ulang tayang tamat', 'Tempoh tonton semula sudah lepas.');
+    else if (e.status === 403) stop('Tiada tiket', 'Akaun ini belum ada tiket.', `<a class="btn" href="/ppv/e/${esc(slug)}">Beli tiket</a>`);
+    else stop('Tidak dapat bermula', e.message);
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S !== null) beat(); });
+addEventListener('pagehide', () => navigator.sendBeacon?.(`/api/ppv/watch/${slug}/end`, new Blob(['{}'], { type: 'application/json' })));
+start();
+</script></body></html>

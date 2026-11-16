@@ -355,7 +355,7 @@ export function statusPage(tenant, { title, message, status = 503 }) {
 }
 
 // ---------- request gate ----------
-const PAGE_PATHS = [/^\/$/, /^\/admin\/?$/, /^\/panel\/?$/, /^\/shoot\/?$/, /^\/organizers\/?$/,
+const PAGE_PATHS = [/^\/ppv\/?$/, /^\/ppv\/(e|watch)\/[a-z0-9-]{2,63}\/?$/, /^\/ppv\/org\/?$/, /^\/admin\/ppv\/?$/, /^\/$/, /^\/admin\/?$/, /^\/panel\/?$/, /^\/shoot\/?$/, /^\/organizers\/?$/,
   /^\/c\/\d{6}\/?$/, /^\/join\/\d{6}\/?$/, /^\/show\/[0-9a-f-]{36}\/?$/, /^\/e\/[a-z0-9]{6,16}\/?$/, /^\/d\/[A-Za-z0-9_-]{10,40}\/?$/];
 
 export function isPagePath(pathname) { return PAGE_PATHS.some((re) => re.test(pathname)); }
