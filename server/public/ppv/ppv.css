@@ -25,9 +25,9 @@ header.top .wrap{display:flex;align-items:center;gap:16px;height:60px}
 .chip{padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--bg2);color:var(--mut);cursor:pointer;font-size:14px}
 .chip.on{background:var(--ac);color:#04201d;border-color:var(--ac)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;padding-bottom:60px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,border-color .2s}
+.card{color:var(--tx);background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,border-color .2s}
 .card:hover{transform:translateY(-3px);border-color:var(--ac)}
-.poster{aspect-ratio:16/9;background:linear-gradient(135deg,var(--bg2),#0d2a2c);background-size:cover;background-position:center;position:relative}
+.poster{aspect-ratio:16/9;background:radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--ac) 32%,transparent),transparent 60%),linear-gradient(135deg,var(--bg2),#0b1a1c);background-size:cover;background-position:center;position:relative}
 .poster .tag{position:absolute;left:12px;top:12px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.65);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ac)}
 .poster .live{left:auto;right:12px;background:var(--bad);color:#fff}
 .poster .live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:6px;animation:pulse 1.2s infinite}
@@ -36,6 +36,7 @@ header.top .wrap{display:flex;align-items:center;gap:16px;height:60px}
 .card h3{margin:0;font-size:18px}
 .meta{color:var(--mut);font-size:14px}
 .price{margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:10px}
+.price .btn{color:#04201d}
 .price strong{font-size:20px;color:var(--ac)}
 .empty{padding:60px 0;text-align:center;color:var(--mut)}
 /* event page */
