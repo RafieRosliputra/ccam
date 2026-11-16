@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
+import { initPpv } from './ppv/db.js';
 
 const SCHEMA_VERSION = 2;
 
@@ -157,6 +158,7 @@ export function openDb(file = path.join(config.dataDir, 'livephoto.db')) {
   // white-label: the organiser (organizers.id) that owns this event on <slug>.ccam.my
   try { db.exec("ALTER TABLE events ADD COLUMN organizer_id TEXT NOT NULL DEFAULT ''"); } catch { /* already there */ }
   db.prepare("INSERT OR IGNORE INTO meta(key,value) VALUES('schema',?)").run(String(SCHEMA_VERSION));
+  initPpv(db);   // pay-per-view tables (ppv_*), additive
   return db;
 }
 export function closeDb() { if (db) { db.close(); db = undefined; } }
