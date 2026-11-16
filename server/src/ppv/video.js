@@ -15,10 +15,11 @@ export function signStreamJwt(uid, expSec, keyId, pem) {
 
 export function playbackUrl(ev, { token, expMs }) {
   if (ev.provider === 'cfstream') {
-    const code = process.env.PPV_CF_STREAM_CODE, kid = process.env.PPV_CF_STREAM_KEY_ID, pemB64 = process.env.PPV_CF_STREAM_PEM;
-    if (!code || !kid || !pemB64) return null;
+    const code = process.env.PPV_CF_STREAM_CODE || '', kid = process.env.PPV_CF_STREAM_KEY_ID, pemB64 = process.env.PPV_CF_STREAM_PEM;
+    if (!kid || !pemB64) return null;
     const jwt = signStreamJwt(ev.provider_ref, Math.floor(expMs / 1000), kid, Buffer.from(pemB64, 'base64').toString('utf8'));
-    return `https://customer-${code}.cloudflarestream.com/${jwt}/manifest/video.m3u8`;
+    // customer code is optional: videodelivery.net accepts the same signed token
+    return `https://${code ? `customer-${code}.cloudflarestream.com` : 'videodelivery.net'}/${jwt}/manifest/video.m3u8`;
   }
   if (!ev.provider_ref) return null;
   const sep = ev.provider_ref.includes('?') ? '&' : '?';
